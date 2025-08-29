@@ -2,17 +2,38 @@ import { useState } from 'react';
 import { Type, Image, Upload, MousePointer, Square, Circle, Minus } from 'lucide-react';
 
 function App() {
-  const [selectedTool, setSelectedTool] = useState<string | null>(null);
-  const [canvasElements, setCanvasElements] = useState<any[]>([]);
+  type CanvasElement = {
+    id: number;
+    type: 'text' | 'image';
+    content?: string;
+    src?: string | ArrayBuffer | null;
+    x: number;
+    y: number;
+    fontSize?: number;
+    color?: string;
+    width: number;
+    height: number;
+  };
+
+  const [canvasElements, setCanvasElements] = useState<CanvasElement[]>([]);
   const [selectedElementId, setSelectedElementId] = useState<number | null>(null);
   const [showEffectDropdown, setShowEffectDropdown] = useState<boolean>(false);
   
-  // Al inicio de tu componente App, junto a los otros useState
-  const [action, setAction] = useState<{ type: 'moving' | 'resizing' | null, elementId: number | null, initialX: number, initialY: number }>({
+  // Estado para gestionar acciones de movimiento y redimensionamiento
+  const [action, setAction] = useState<{
+    type: 'moving' | 'resizing' | null;
+    elementId: number | null;
+    initialX: number;
+    initialY: number;
+    initialWidth: number;
+    initialHeight: number;
+  }>({
     type: null,
     elementId: null,
     initialX: 0,
     initialY: 0,
+    initialWidth: 0,
+    initialHeight: 0,
   });
   
   const handleAddText = () => {
@@ -23,10 +44,11 @@ function App() {
       x: 300,
       y: 200,
       fontSize: 24,
-      color: '#333333'
+      color: '#333333',
+      width: 200,
+      height: 60,
     };
     setCanvasElements([...canvasElements, newText]);
-    setSelectedTool('text');
   };
 
   const handleImageUpload = () => {
@@ -154,15 +176,43 @@ function App() {
             setCanvasElements(
               canvasElements.map((el) =>
                 el.id === action.elementId ? { ...el, x: newX, y: newY } : el
-                )
-              );
-            }
+              )
+            );
+          } else if (action.type === 'resizing' && action.elementId) {
+            const deltaX = e.clientX - action.initialX;
+            const deltaY = e.clientY - action.initialY;
+
+            const newWidth = Math.max(20, action.initialWidth + deltaX);
+            const newHeight = Math.max(20, action.initialHeight + deltaY);
+
+            setCanvasElements(
+              canvasElements.map((el) =>
+                el.id === action.elementId
+                  ? { ...el, width: newWidth, height: newHeight }
+                  : el
+              )
+            );
+          }
         }}
         onMouseUp={() => {
-          setAction({ type: null, elementId: null, initialX: 0, initialY: 0 });
+          setAction({
+            type: null,
+            elementId: null,
+            initialX: 0,
+            initialY: 0,
+            initialWidth: 0,
+            initialHeight: 0,
+          });
         }}
-          onMouseLeave={() => { // También es buena idea resetear si el ratón sale del lienzo
-            setAction({ type: null, elementId: null, initialX: 0, initialY: 0 });
+        onMouseLeave={() => {
+          setAction({
+            type: null,
+            elementId: null,
+            initialX: 0,
+            initialY: 0,
+            initialWidth: 0,
+            initialHeight: 0,
+          });
         }}>
         
           {/* Interactive Canvas Zone */}
@@ -195,17 +245,18 @@ function App() {
                   {canvasElements.map((element) => (
                     <div
                       key={element.id}
-                      className="absolute cursor-move hover:shadow-lg transition-shadow duration-200"
-                        // Añade este manejador
-                        onMouseDown={(e) => {
-                          e.stopPropagation();
-                          setAction({
-                            type: 'moving',
-                            elementId: element.id,
-                            initialX: e.clientX - element.x,
-                            initialY: e.clientY - element.y,
-                          });
-                        }}
+                      className="absolute cursor-move hover:shadow-lg transition-shadow duration-200 relative"
+                      onMouseDown={(e) => {
+                        e.stopPropagation();
+                        setAction({
+                          type: 'moving',
+                          elementId: element.id,
+                          initialX: e.clientX - element.x,
+                          initialY: e.clientY - element.y,
+                          initialWidth: element.width || 0,
+                          initialHeight: element.height || 0,
+                        });
+                      }}
                       onClick={(e) => {
                         e.stopPropagation();
                         setSelectedElementId(element.id);
@@ -215,103 +266,117 @@ function App() {
                         left: element.x,
                         top: element.y,
                         fontSize: element.fontSize,
-                        color: element.color
+                        color: element.color,
+                        width: element.width,
+                        height: element.height,
                       }}
                     >
                       {element.type === 'text' ? (
-                        <div className="bg-white/90 px-3 py-2 rounded-lg border border-slate-200 backdrop-blur-sm">
+                        <div className="bg-white/90 w-full h-full px-3 py-2 rounded-lg border border-slate-200 backdrop-blur-sm flex items-center justify-center">
                           {element.content}
                         </div>
                       ) : element.type === 'image' ? (
                         <img
                           src={element.src}
                           alt="Canvas element"
-                          className="rounded-lg shadow-md border border-slate-200"
-                          style={{
-                            width: element.width,
-                            height: element.height
-                          }}
+                          className="rounded-lg shadow-md border border-slate-200 w-full h-full"
                         />
                       ) : null}
-                      
+
                       {selectedElementId === element.id && (
-                        <div className="relative">
-                          <button
-                            className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded-md text-sm shadow-md transition-colors duration-200"
-                            style={{
-                              position: 'absolute',
-                              top: '100%',
-                              left: '0%',
-                              marginTop: '10px'
-                            }}
-                            onClick={(e) => {
+                        <>
+                          <div
+                            className="absolute -right-2 -bottom-2 w-4 h-4 bg-blue-600 border-2 border-white rounded-full cursor-se-resize"
+                            onMouseDown={(e) => {
                               e.stopPropagation();
-                              setShowEffectDropdown(!showEffectDropdown);
+                              setAction({
+                                type: 'resizing',
+                                elementId: element.id,
+                                initialX: e.clientX,
+                                initialY: e.clientY,
+                                initialWidth: element.width || 0,
+                                initialHeight: element.height || 0,
+                              });
                             }}
-                          >
-                            Añadir efecto
-                          </button>
-                          
-                          {showEffectDropdown && (
-                            <div
-                              className="absolute bg-white border border-slate-200 rounded-md shadow-lg py-1 z-10"
+                          />
+                          <div className="relative">
+                            <button
+                              className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded-md text-sm shadow-md transition-colors duration-200"
                               style={{
-                                top: 'calc(100% + 50px)',
+                                position: 'absolute',
+                                top: '100%',
                                 left: '0%',
-                                minWidth: '180px'
+                                marginTop: '10px',
                               }}
-                              onClick={(e) => e.stopPropagation()}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setShowEffectDropdown(!showEffectDropdown);
+                              }}
                             >
-                              <button
-                                className="block w-full text-left px-4 py-2 text-slate-700 hover:bg-slate-100 transition-colors duration-200"
-                                onClick={() => {
-                                  console.log('Applying fade animation to element:', element.id);
-                                  setShowEffectDropdown(false);
+                              Añadir efecto
+                            </button>
+
+                            {showEffectDropdown && (
+                              <div
+                                className="absolute bg-white border border-slate-200 rounded-md shadow-lg py-1 z-10"
+                                style={{
+                                  top: 'calc(100% + 50px)',
+                                  left: '0%',
+                                  minWidth: '180px',
                                 }}
+                                onClick={(e) => e.stopPropagation()}
                               >
-                                🎭 Animación de entrada
-                              </button>
-                              <button
-                                className="block w-full text-left px-4 py-2 text-slate-700 hover:bg-slate-100 transition-colors duration-200"
-                                onClick={() => {
-                                  console.log('Applying transition to element:', element.id);
-                                  setShowEffectDropdown(false);
-                                }}
-                              >
-                                ⚡ Transición
-                              </button>
-                              <button
-                                className="block w-full text-left px-4 py-2 text-slate-700 hover:bg-slate-100 transition-colors duration-200"
-                                onClick={() => {
-                                  console.log('Applying filter to element:', element.id);
-                                  setShowEffectDropdown(false);
-                                }}
-                              >
-                                🎨 Filtro visual
-                              </button>
-                              <button
-                                className="block w-full text-left px-4 py-2 text-slate-700 hover:bg-slate-100 transition-colors duration-200"
-                                onClick={() => {
-                                  console.log('Applying shadow to element:', element.id);
-                                  setShowEffectDropdown(false);
-                                }}
-                              >
-                                💫 Sombra
-                              </button>
-                              <div className="border-t border-slate-200 my-1"></div>
-                              <button
-                                className="block w-full text-left px-4 py-2 text-red-600 hover:bg-red-50 transition-colors duration-200"
-                                onClick={() => {
-                                  setCanvasElements(canvasElements.filter(el => el.id !== element.id));
-                                  setSelectedElementId(null);
-                                  setShowEffectDropdown(false);
-                                }}
-                              >
-                                🗑️ Eliminar elemento
-                              </button>
-                            </div>
-                          )}
-                        </div>
+                                <button
+                                  className="block w-full text-left px-4 py-2 text-slate-700 hover:bg-slate-100 transition-colors duration-200"
+                                  onClick={() => {
+                                    console.log('Applying fade animation to element:', element.id);
+                                    setShowEffectDropdown(false);
+                                  }}
+                                >
+                                  🎭 Animación de entrada
+                                </button>
+                                <button
+                                  className="block w-full text-left px-4 py-2 text-slate-700 hover:bg-slate-100 transition-colors duration-200"
+                                  onClick={() => {
+                                    console.log('Applying transition to element:', element.id);
+                                    setShowEffectDropdown(false);
+                                  }}
+                                >
+                                  ⚡ Transición
+                                </button>
+                                <button
+                                  className="block w-full text-left px-4 py-2 text-slate-700 hover:bg-slate-100 transition-colors duration-200"
+                                  onClick={() => {
+                                    console.log('Applying filter to element:', element.id);
+                                    setShowEffectDropdown(false);
+                                  }}
+                                >
+                                  🎨 Filtro visual
+                                </button>
+                                <button
+                                  className="block w-full text-left px-4 py-2 text-slate-700 hover:bg-slate-100 transition-colors duration-200"
+                                  onClick={() => {
+                                    console.log('Applying shadow to element:', element.id);
+                                    setShowEffectDropdown(false);
+                                  }}
+                                >
+                                  💫 Sombra
+                                </button>
+                                <div className="border-t border-slate-200 my-1"></div>
+                                <button
+                                  className="block w-full text-left px-4 py-2 text-red-600 hover:bg-red-50 transition-colors duration-200"
+                                  onClick={() => {
+                                    setCanvasElements(canvasElements.filter((el) => el.id !== element.id));
+                                    setSelectedElementId(null);
+                                    setShowEffectDropdown(false);
+                                  }}
+                                >
+                                  🗑️ Eliminar elemento
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        </>
                       )}
                     </div>
                   ))}
