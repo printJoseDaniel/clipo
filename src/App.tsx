@@ -150,7 +150,6 @@ function App() {
             {/* Canvas Content */}
             <div className="relative w-full h-full p-8" onClick={() => setSelectedElementId(null)}>
               {canvasElements.length === 0 ? (
-              setShowEffectDropdown(false);
                 <div className="flex flex-col items-center justify-center h-full text-center">
                   <div className="w-16 h-16 bg-gradient-to-br from-blue-100 to-blue-200 rounded-full flex items-center justify-center mb-4 group-hover:scale-110 transition-transform duration-300">
                     <Upload className="w-8 h-8 text-blue-600" />
