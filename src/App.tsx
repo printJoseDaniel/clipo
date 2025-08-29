@@ -1,14 +1,11 @@
-import React, { useState } from 'react';
-import { Type, Image, Upload, MousePointer, Square, Circle, Minus, Move, RotateCcw } from 'lucide-react';
+import { useState } from 'react';
+import { Type, Image, Upload, MousePointer, Square, Circle, Minus } from 'lucide-react';
 
 function App() {
   const [selectedTool, setSelectedTool] = useState<string | null>(null);
   const [canvasElements, setCanvasElements] = useState<any[]>([]);
   const [selectedElementId, setSelectedElementId] = useState<number | null>(null);
   const [showEffectDropdown, setShowEffectDropdown] = useState<boolean>(false);
-  const [isDragging, setIsDragging] = useState<boolean>(false);
-  const [dragOffset, setDragOffset] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
-  const [isResizing, setIsResizing] = useState<boolean>(false);
 
   const handleAddText = () => {
     const newText = {
@@ -48,88 +45,6 @@ function App() {
       }
     };
     input.click();
-  };
-
-  const handleMouseDown = (e: React.MouseEvent, elementId: number) => {
-    e.stopPropagation();
-    const element = canvasElements.find(el => el.id === elementId);
-    if (!element) return;
-
-    setSelectedElementId(elementId);
-    setShowEffectDropdown(false);
-    setIsDragging(true);
-
-    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-    setDragOffset({
-      x: e.clientX - rect.left,
-      y: e.clientY - rect.top
-    });
-  };
-
-  const handleMouseMove = (e: React.MouseEvent) => {
-    if (!isDragging || selectedElementId === null) return;
-
-    const canvasRect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-    const newX = e.clientX - canvasRect.left - dragOffset.x;
-    const newY = e.clientY - canvasRect.top - dragOffset.y;
-
-    setCanvasElements(elements =>
-      elements.map(el =>
-        el.id === selectedElementId
-          ? { ...el, x: Math.max(0, newX), y: Math.max(0, newY) }
-          : el
-      )
-    );
-  };
-
-  const handleMouseUp = () => {
-    setIsDragging(false);
-    setIsResizing(false);
-  };
-
-  const handleResize = (elementId: number, direction: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    setIsResizing(true);
-    setSelectedElementId(elementId);
-
-    const startX = e.clientX;
-    const startY = e.clientY;
-    const element = canvasElements.find(el => el.id === elementId);
-    if (!element) return;
-
-    const startWidth = element.width || 200;
-    const startHeight = element.height || 150;
-    const startFontSize = element.fontSize || 24;
-
-    const handleMouseMove = (moveEvent: MouseEvent) => {
-      const deltaX = moveEvent.clientX - startX;
-      const deltaY = moveEvent.clientY - startY;
-
-      setCanvasElements(elements =>
-        elements.map(el => {
-          if (el.id !== elementId) return el;
-
-          if (el.type === 'image') {
-            const newWidth = Math.max(50, startWidth + deltaX);
-            const newHeight = Math.max(50, startHeight + deltaY);
-            return { ...el, width: newWidth, height: newHeight };
-          } else if (el.type === 'text') {
-            const newFontSize = Math.max(12, Math.min(72, startFontSize + deltaY / 2));
-            return { ...el, fontSize: newFontSize };
-          }
-          return el;
-        })
-      );
-    };
-
-    const handleMouseUp = () => {
-      setIsResizing(false);
-      document.removeEventListener('mousemove', handleMouseMove);
-      document.removeEventListener('mouseup', handleMouseUp);
-    };
-
-    document.addEventListener('mousemove', handleMouseMove);
-    document.addEventListener('mouseup', handleMouseUp);
   };
 
   return (
@@ -233,15 +148,7 @@ function App() {
             </div>
 
             {/* Canvas Content */}
-            <div 
-              className="relative w-full h-full p-8" 
-              onClick={() => {
-                setSelectedElementId(null);
-                setShowEffectDropdown(false);
-              }}
-              onMouseMove={handleMouseMove}
-              onMouseUp={handleMouseUp}
-            >
+            <div className="relative w-full h-full p-8" onClick={() => setSelectedElementId(null)}>
               {canvasElements.length === 0 ? (
                 <div className="flex flex-col items-center justify-center h-full text-center">
                   <div className="w-16 h-16 bg-gradient-to-br from-blue-100 to-blue-200 rounded-full flex items-center justify-center mb-4 group-hover:scale-110 transition-transform duration-300">
@@ -260,23 +167,17 @@ function App() {
                   {canvasElements.map((element) => (
                     <div
                       key={element.id}
-                      className={`absolute transition-shadow duration-200 ${
-                        selectedElementId === element.id 
-                          ? 'ring-2 ring-blue-500 ring-opacity-50' 
-                          : 'hover:shadow-lg'
-                      } ${isDragging ? 'cursor-grabbing' : 'cursor-grab'}`}
+                      className="absolute cursor-move hover:shadow-lg transition-shadow duration-200"
                       onClick={(e) => {
                         e.stopPropagation();
                         setSelectedElementId(element.id);
                         setShowEffectDropdown(false);
                       }}
-                      onMouseDown={(e) => handleMouseDown(e, element.id)}
                       style={{
                         left: element.x,
                         top: element.y,
                         fontSize: element.fontSize,
-                        color: element.color,
-                        userSelect: 'none'
+                        color: element.color
                       }}
                     >
                       {element.type === 'text' ? (
@@ -296,21 +197,6 @@ function App() {
                       ) : null}
                       
                       {selectedElementId === element.id && (
-                        <>
-                          {/* Resize Handles */}
-                          <div className="absolute -top-1 -left-1 w-3 h-3 bg-blue-500 border-2 border-white rounded-full cursor-nw-resize shadow-md"></div>
-                          <div className="absolute -top-1 -right-1 w-3 h-3 bg-blue-500 border-2 border-white rounded-full cursor-ne-resize shadow-md"></div>
-                          <div className="absolute -bottom-1 -left-1 w-3 h-3 bg-blue-500 border-2 border-white rounded-full cursor-sw-resize shadow-md"></div>
-                          <div 
-                            className="absolute -bottom-1 -right-1 w-3 h-3 bg-blue-500 border-2 border-white rounded-full cursor-se-resize shadow-md"
-                            onMouseDown={(e) => handleResize(element.id, 'se', e)}
-                          ></div>
-                          
-                          {/* Move Handle */}
-                          <div className="absolute -top-6 left-1/2 transform -translate-x-1/2 bg-blue-600 text-white p-1 rounded-md shadow-md">
-                            <Move className="w-3 h-3" />
-                          </div>
-
                         <div className="relative">
                           <button
                             className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded-md text-sm shadow-md transition-colors duration-200"
@@ -388,7 +274,6 @@ function App() {
                             </div>
                           )}
                         </div>
-                        </>
                       )}
                     </div>
                   ))}
