@@ -5,6 +5,7 @@ function App() {
   const [selectedTool, setSelectedTool] = useState<string | null>(null);
   const [canvasElements, setCanvasElements] = useState<any[]>([]);
   const [selectedElementId, setSelectedElementId] = useState<number | null>(null);
+  const [showEffectDropdown, setShowEffectDropdown] = useState<boolean>(false);
 
   const handleAddText = () => {
     const newText = {
@@ -149,6 +150,7 @@ function App() {
             {/* Canvas Content */}
             <div className="relative w-full h-full p-8" onClick={() => setSelectedElementId(null)}>
               {canvasElements.length === 0 ? (
+              setShowEffectDropdown(false);
                 <div className="flex flex-col items-center justify-center h-full text-center">
                   <div className="w-16 h-16 bg-gradient-to-br from-blue-100 to-blue-200 rounded-full flex items-center justify-center mb-4 group-hover:scale-110 transition-transform duration-300">
                     <Upload className="w-8 h-8 text-blue-600" />
@@ -170,6 +172,7 @@ function App() {
                       onClick={(e) => {
                         e.stopPropagation();
                         setSelectedElementId(element.id);
+                        setShowEffectDropdown(false);
                       }}
                       style={{
                         left: element.x,
@@ -195,22 +198,83 @@ function App() {
                       ) : null}
                       
                       {selectedElementId === element.id && (
-                        <button
-                          className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded-md text-sm shadow-md transition-colors duration-200"
-                          style={{
-                            position: 'absolute',
-                            top: '100%',
-                            left: '0%',
-                            marginTop: '10px'
-                          }}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            // TODO: Add effect functionality here
-                            console.log('Adding effect to element:', element.id);
-                          }}
-                        >
-                          Añadir efecto
-                        </button>
+                        <div className="relative">
+                          <button
+                            className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded-md text-sm shadow-md transition-colors duration-200"
+                            style={{
+                              position: 'absolute',
+                              top: '100%',
+                              left: '0%',
+                              marginTop: '10px'
+                            }}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setShowEffectDropdown(!showEffectDropdown);
+                            }}
+                          >
+                            Añadir efecto
+                          </button>
+                          
+                          {showEffectDropdown && (
+                            <div
+                              className="absolute bg-white border border-slate-200 rounded-md shadow-lg py-1 z-10"
+                              style={{
+                                top: 'calc(100% + 50px)',
+                                left: '0%',
+                                minWidth: '180px'
+                              }}
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              <button
+                                className="block w-full text-left px-4 py-2 text-slate-700 hover:bg-slate-100 transition-colors duration-200"
+                                onClick={() => {
+                                  console.log('Applying fade animation to element:', element.id);
+                                  setShowEffectDropdown(false);
+                                }}
+                              >
+                                🎭 Animación de entrada
+                              </button>
+                              <button
+                                className="block w-full text-left px-4 py-2 text-slate-700 hover:bg-slate-100 transition-colors duration-200"
+                                onClick={() => {
+                                  console.log('Applying transition to element:', element.id);
+                                  setShowEffectDropdown(false);
+                                }}
+                              >
+                                ⚡ Transición
+                              </button>
+                              <button
+                                className="block w-full text-left px-4 py-2 text-slate-700 hover:bg-slate-100 transition-colors duration-200"
+                                onClick={() => {
+                                  console.log('Applying filter to element:', element.id);
+                                  setShowEffectDropdown(false);
+                                }}
+                              >
+                                🎨 Filtro visual
+                              </button>
+                              <button
+                                className="block w-full text-left px-4 py-2 text-slate-700 hover:bg-slate-100 transition-colors duration-200"
+                                onClick={() => {
+                                  console.log('Applying shadow to element:', element.id);
+                                  setShowEffectDropdown(false);
+                                }}
+                              >
+                                💫 Sombra
+                              </button>
+                              <div className="border-t border-slate-200 my-1"></div>
+                              <button
+                                className="block w-full text-left px-4 py-2 text-red-600 hover:bg-red-50 transition-colors duration-200"
+                                onClick={() => {
+                                  setCanvasElements(canvasElements.filter(el => el.id !== element.id));
+                                  setSelectedElementId(null);
+                                  setShowEffectDropdown(false);
+                                }}
+                              >
+                                🗑️ Eliminar elemento
+                              </button>
+                            </div>
+                          )}
+                        </div>
                       )}
                     </div>
                   ))}
