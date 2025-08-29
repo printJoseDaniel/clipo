@@ -4,6 +4,7 @@ import { Type, Image, Upload, MousePointer, Square, Circle, Minus } from 'lucide
 function App() {
   const [selectedTool, setSelectedTool] = useState<string | null>(null);
   const [canvasElements, setCanvasElements] = useState<any[]>([]);
+  const [selectedElementId, setSelectedElementId] = useState<number | null>(null);
 
   const handleAddText = () => {
     const newText = {
@@ -146,7 +147,7 @@ function App() {
             </div>
 
             {/* Canvas Content */}
-            <div className="relative w-full h-full p-8">
+            <div className="relative w-full h-full p-8" onClick={() => setSelectedElementId(null)}>
               {canvasElements.length === 0 ? (
                 <div className="flex flex-col items-center justify-center h-full text-center">
                   <div className="w-16 h-16 bg-gradient-to-br from-blue-100 to-blue-200 rounded-full flex items-center justify-center mb-4 group-hover:scale-110 transition-transform duration-300">
@@ -166,6 +167,10 @@ function App() {
                     <div
                       key={element.id}
                       className="absolute cursor-move hover:shadow-lg transition-shadow duration-200"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSelectedElementId(element.id);
+                      }}
                       style={{
                         left: element.x,
                         top: element.y,
@@ -188,6 +193,25 @@ function App() {
                           }}
                         />
                       ) : null}
+                      
+                      {selectedElementId === element.id && (
+                        <button
+                          className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded-md text-sm shadow-md transition-colors duration-200"
+                          style={{
+                            position: 'absolute',
+                            top: '100%',
+                            left: '0%',
+                            marginTop: '10px'
+                          }}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            // TODO: Add effect functionality here
+                            console.log('Adding effect to element:', element.id);
+                          }}
+                        >
+                          Añadir efecto
+                        </button>
+                      )}
                     </div>
                   ))}
                 </div>
