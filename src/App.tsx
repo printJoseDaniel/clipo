@@ -6,7 +6,15 @@ function App() {
   const [canvasElements, setCanvasElements] = useState<any[]>([]);
   const [selectedElementId, setSelectedElementId] = useState<number | null>(null);
   const [showEffectDropdown, setShowEffectDropdown] = useState<boolean>(false);
-
+  
+  // Al inicio de tu componente App, junto a los otros useState
+  const [action, setAction] = useState<{ type: 'moving' | 'resizing' | null, elementId: number | null, initialX: number, initialY: number }>({
+    type: null,
+    elementId: null,
+    initialX: 0,
+    initialY: 0,
+  });
+  
   const handleAddText = () => {
     const newText = {
       id: Date.now(),
@@ -136,7 +144,27 @@ function App() {
         </div>
 
         {/* Canvas Container */}
-        <div className="h-[calc(100vh-4rem)] flex items-center justify-center p-8 bg-gradient-to-br from-slate-50 to-slate-100">
+        <div className="h-[calc(100vh-4rem)] flex items-center justify-center p-8 bg-gradient-to-br from-slate-50 to-slate-100"
+          // Añado manejadores 
+        onMouseMove={(e) => {
+          if (action.type === 'moving' && action.elementId) {
+            const newX = e.clientX - action.initialX;
+            const newY = e.clientY - action.initialY;
+
+            setCanvasElements(
+              canvasElements.map((el) =>
+                el.id === action.elementId ? { ...el, x: newX, y: newY } : el
+                )
+              );
+            }
+        }}
+        onMouseUp={() => {
+          setAction({ type: null, elementId: null, initialX: 0, initialY: 0 });
+        }}
+          onMouseLeave={() => { // También es buena idea resetear si el ratón sale del lienzo
+            setAction({ type: null, elementId: null, initialX: 0, initialY: 0 });
+        }}>
+        
           {/* Interactive Canvas Zone */}
           <div className="relative w-[60%] h-[70%] bg-white rounded-2xl shadow-2xl border-2 border-dashed border-slate-300 hover:border-blue-400 transition-all duration-300 cursor-pointer group overflow-hidden">
             {/* Canvas Background Pattern */}
@@ -168,6 +196,16 @@ function App() {
                     <div
                       key={element.id}
                       className="absolute cursor-move hover:shadow-lg transition-shadow duration-200"
+                        // Añade este manejador
+                        onMouseDown={(e) => {
+                          e.stopPropagation();
+                          setAction({
+                            type: 'moving',
+                            elementId: element.id,
+                            initialX: e.clientX - element.x,
+                            initialY: e.clientY - element.y,
+                          });
+                        }}
                       onClick={(e) => {
                         e.stopPropagation();
                         setSelectedElementId(element.id);
