@@ -11,6 +11,9 @@ function App() {
     y: number;
     fontSize?: number;
     color?: string;
+    fontFamily?: string;
+    fontWeight?: 'normal' | 'bold';
+    fontStyle?: 'normal' | 'italic';
     width: number;
     height: number;
   };
@@ -18,6 +21,7 @@ function App() {
   const [canvasElements, setCanvasElements] = useState<CanvasElement[]>([]);
   const [selectedElementId, setSelectedElementId] = useState<number | null>(null);
   const [showEffectDropdown, setShowEffectDropdown] = useState<boolean>(false);
+  const [editingTextId, setEditingTextId] = useState<number | null>(null);
   
   // Estado para gestionar acciones de movimiento y redimensionamiento
   const [action, setAction] = useState<{
@@ -77,11 +81,14 @@ function App() {
     const newText: CanvasElement = {
       id: Date.now(),
       type: 'text',
-      content: 'Haz clic para editar',
+      content: 'Haz doble clic para editar',
       x: 300,
       y: 200,
       fontSize: 24,
       color: '#333333',
+      fontFamily: 'Inter, system-ui, sans-serif',
+      fontWeight: 'normal',
+      fontStyle: 'normal',
       width: 200,
       height: 60,
     };
@@ -353,6 +360,8 @@ function App() {
                       onMouseDown={(e) => {
                         e.stopPropagation();
                         e.preventDefault();
+                        // Evitar iniciar movimiento si está en edición de texto o doble clic
+                        if (editingTextId === element.id || e.detail >= 2) return;
                         setAction({
                           type: 'moving',
                           elementId: element.id,
@@ -366,6 +375,16 @@ function App() {
                         e.stopPropagation();
                         setSelectedElementId(element.id);
                         setShowEffectDropdown(false);
+                        if (element.type === 'text') {
+                          setEditingTextId(null);
+                        }
+                      }}
+                      onDoubleClick={(e) => {
+                        if (element.type === 'text') {
+                          e.stopPropagation();
+                          setSelectedElementId(element.id);
+                          setEditingTextId(element.id);
+                        }
                       }}
                       style={{
                         left: element.x,
@@ -377,8 +396,47 @@ function App() {
                       }}
                     >
                       {element.type === 'text' ? (
-                        <div className="bg-white/90 w-full h-full px-3 py-2 rounded-lg border border-slate-200 backdrop-blur-sm flex items-center justify-center">
-                          {element.content}
+                        <div
+                          className="bg-white/90 w-full h-full px-3 py-2 rounded-lg border border-slate-200 backdrop-blur-sm flex items-center justify-center overflow-hidden"
+                          style={{
+                            fontFamily: element.fontFamily,
+                            fontWeight: element.fontWeight,
+                            fontStyle: element.fontStyle,
+                          }}
+                        >
+                          {editingTextId === element.id ? (
+                            <div
+                              contentEditable
+                              suppressContentEditableWarning
+                              className="outline-none w-full text-center"
+                              style={{
+                                fontFamily: element.fontFamily,
+                                fontWeight: element.fontWeight,
+                                fontStyle: element.fontStyle,
+                                fontSize: element.fontSize,
+                                color: element.color,
+                              }}
+                              onInput={(e) => {
+                                const text = (e.currentTarget as HTMLDivElement).innerText;
+                                setCanvasElements((prev) =>
+                                  prev.map((el) => (el.id === element.id ? { ...el, content: text } : el))
+                                );
+                              }}
+                              onBlur={() => setEditingTextId(null)}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter' || e.key === 'Escape') {
+                                  e.preventDefault();
+                                  (e.currentTarget as HTMLDivElement).blur();
+                                }
+                              }}
+                            >
+                              {element.content}
+                            </div>
+                          ) : (
+                            <span className="truncate w-full text-center" title={element.content}>
+                              {element.content}
+                            </span>
+                          )}
                         </div>
                       ) : element.type === 'image' ? (
                         <img
@@ -537,6 +595,86 @@ function App() {
                                   }}
                                 >
                                   🗑️ Eliminar elemento
+                                </button>
+                              </div>
+                            )}
+                            {element.type === 'text' && (
+                              <div
+                                className="absolute bg-white border border-slate-200 rounded-md shadow-lg p-3 z-10 flex items-center space-x-2"
+                                style={{
+                                  top: 'calc(100% + 10px)',
+                                  left: '50%',
+                                  transform: 'translateX(-50%)',
+                                }}
+                                onMouseDown={(e) => e.stopPropagation()}
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                <select
+                                  className="border border-slate-300 rounded px-2 py-1 text-sm"
+                                  value={element.fontFamily || 'Inter, system-ui, sans-serif'}
+                                  onChange={(e) => {
+                                    const v = e.target.value;
+                                    setCanvasElements((prev) =>
+                                      prev.map((el) => (el.id === element.id ? { ...el, fontFamily: v } : el))
+                                    );
+                                  }}
+                                >
+                                  <option value="Inter, system-ui, sans-serif">Inter</option>
+                                  <option value="Arial, Helvetica, sans-serif">Arial</option>
+                                  <option value="Georgia, serif">Georgia</option>
+                                  <option value="'Times New Roman', Times, serif">Times New Roman</option>
+                                  <option value="Verdana, Geneva, sans-serif">Verdana</option>
+                                  <option value="Roboto, system-ui, sans-serif">Roboto</option>
+                                </select>
+                                <select
+                                  className="border border-slate-300 rounded px-2 py-1 text-sm"
+                                  value={String(element.fontSize || 16)}
+                                  onChange={(e) => {
+                                    const size = parseInt(e.target.value, 10);
+                                    setCanvasElements((prev) =>
+                                      prev.map((el) => (el.id === element.id ? { ...el, fontSize: size } : el))
+                                    );
+                                  }}
+                                >
+                                  <option value="12">12</option>
+                                  <option value="14">14</option>
+                                  <option value="16">16</option>
+                                  <option value="18">18</option>
+                                  <option value="24">24</option>
+                                  <option value="32">32</option>
+                                  <option value="48">48</option>
+                                </select>
+                                <button
+                                  className={`px-2 py-1 text-sm rounded border ${
+                                    element.fontWeight === 'bold' ? 'bg-slate-200 border-slate-300' : 'border-slate-300'
+                                  }`}
+                                  onClick={() => {
+                                    setCanvasElements((prev) =>
+                                      prev.map((el) =>
+                                        el.id === element.id
+                                          ? { ...el, fontWeight: el.fontWeight === 'bold' ? 'normal' : 'bold' }
+                                          : el
+                                      )
+                                    );
+                                  }}
+                                >
+                                  B
+                                </button>
+                                <button
+                                  className={`px-2 py-1 text-sm rounded border ${
+                                    element.fontStyle === 'italic' ? 'bg-slate-200 border-slate-300' : 'border-slate-300'
+                                  }`}
+                                  onClick={() => {
+                                    setCanvasElements((prev) =>
+                                      prev.map((el) =>
+                                        el.id === element.id
+                                          ? { ...el, fontStyle: el.fontStyle === 'italic' ? 'normal' : 'italic' }
+                                          : el
+                                      )
+                                    );
+                                  }}
+                                >
+                                  I
                                 </button>
                               </div>
                             )}
