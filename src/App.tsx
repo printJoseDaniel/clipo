@@ -638,27 +638,7 @@ function App() {
                                   <option value="Verdana, Geneva, sans-serif">Verdana</option>
                                   <option value="Roboto, system-ui, sans-serif">Roboto</option>
                                 </select>
-                                <div className="flex items-center space-x-1">
-                                  <select
-                                    className="border border-slate-300 rounded px-2 py-1 text-sm"
-                                    value={String(element.fontSize || 16)}
-                                    onChange={(e) => {
-                                      const size = parseInt(e.target.value, 10);
-                                      if (!isNaN(size)) {
-                                        setCanvasElements((prev) =>
-                                          prev.map((el) => (el.id === element.id ? { ...el, fontSize: size } : el))
-                                        );
-                                      }
-                                    }}
-                                  >
-                                    <option value="12">12</option>
-                                    <option value="14">14</option>
-                                    <option value="16">16</option>
-                                    <option value="18">18</option>
-                                    <option value="24">24</option>
-                                    <option value="32">32</option>
-                                    <option value="48">48</option>
-                                  </select>
+                                <div className="flex items-center">
                                   <input
                                     type="number"
                                     className="w-20 border border-slate-300 rounded px-2 py-1 text-sm"
