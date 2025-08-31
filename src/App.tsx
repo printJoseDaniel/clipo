@@ -10,11 +10,15 @@ function App() {
     x: number;
     y: number;
     fontSize?: number;
-    color?: string;
+    color?: string; // text color
     fontFamily?: string;
     fontWeight?: 'normal' | 'bold';
     fontStyle?: 'normal' | 'italic';
     borderRadius?: number; // 0-100 (porcentaje)
+    borderWidth?: number; // px
+    borderColor?: string;
+    borderStyle?: 'solid' | 'dashed';
+    backgroundColor?: string; // for text box background
     width: number;
     height: number;
   };
@@ -100,6 +104,10 @@ function App() {
       fontWeight: 'normal',
       fontStyle: 'normal',
       borderRadius: 0,
+      borderWidth: 1,
+      borderColor: '#e2e8f0',
+      borderStyle: 'solid',
+      backgroundColor: 'transparent',
       width: defaultWidth,
       height: defaultHeight,
     };
@@ -424,12 +432,16 @@ function App() {
                     >
                       {element.type === 'text' ? (
                         <div
-                          className="bg-white/90 w-full h-full px-3 py-2 rounded-lg border border-slate-200 backdrop-blur-sm flex items-center justify-center overflow-hidden"
+                          className="w-full h-full px-3 py-2 rounded-lg border backdrop-blur-sm flex items-center justify-center overflow-hidden"
                           style={{
                             fontFamily: element.fontFamily,
                             fontWeight: element.fontWeight,
                             fontStyle: element.fontStyle,
                             borderRadius: `${element.borderRadius ?? 0}%`,
+                            borderWidth: (element.borderWidth ?? 0) + 'px',
+                            borderColor: element.borderColor ?? '#e2e8f0',
+                            borderStyle: element.borderStyle ?? 'solid',
+                            backgroundColor: element.backgroundColor ?? 'transparent',
                           }}
                         >
                           {editingTextId === element.id ? (
@@ -475,7 +487,7 @@ function App() {
                               {element.content}
                             </div>
                           ) : (
-                            <span className="truncate w-full text-center" title={element.content}>
+                            <span className="truncate w-full text-center" title={element.content} style={{ color: element.color }}>
                               {element.content}
                             </span>
                           )}
@@ -727,6 +739,80 @@ function App() {
                                       }
                                     }}
                                   />
+                                </div>
+                                {/* Text color */}
+                                <div className="flex items-center space-x-1">
+                                  <label className="text-xs text-slate-600">Texto</label>
+                                  <input
+                                    type="color"
+                                    className="w-8 h-8 p-0 border border-slate-300 rounded"
+                                    value={element.color || '#333333'}
+                                    onChange={(e) => {
+                                      const v = e.target.value;
+                                      setCanvasElements((prev) =>
+                                        prev.map((el) => (el.id === element.id ? { ...el, color: v } : el))
+                                      );
+                                    }}
+                                  />
+                                </div>
+                                {/* Background color */}
+                                <div className="flex items-center space-x-1">
+                                  <label className="text-xs text-slate-600">Fondo</label>
+                                  <input
+                                    type="color"
+                                    className="w-8 h-8 p-0 border border-slate-300 rounded"
+                                    value={element.backgroundColor || '#ffffff'}
+                                    onChange={(e) => {
+                                      const v = e.target.value;
+                                      setCanvasElements((prev) =>
+                                        prev.map((el) =>
+                                          el.id === element.id ? { ...el, backgroundColor: v } : el
+                                        )
+                                      );
+                                    }}
+                                  />
+                                </div>
+                                {/* Border width */}
+                                <div className="flex items-center space-x-1">
+                                  <label className="text-xs text-slate-600">Borde</label>
+                                  <input
+                                    type="number"
+                                    className="w-16 border border-slate-300 rounded px-2 py-1 text-sm"
+                                    min={0}
+                                    max={20}
+                                    step={1}
+                                    value={Number(element.borderWidth ?? 0)}
+                                    onChange={(e) => {
+                                      const v = Math.max(0, Math.min(20, parseInt(e.target.value, 10) || 0));
+                                      setCanvasElements((prev) =>
+                                        prev.map((el) => (el.id === element.id ? { ...el, borderWidth: v } : el))
+                                      );
+                                    }}
+                                  />
+                                  <input
+                                    type="color"
+                                    className="w-8 h-8 p-0 border border-slate-300 rounded"
+                                    value={element.borderColor || '#e2e8f0'}
+                                    onChange={(e) => {
+                                      const v = e.target.value;
+                                      setCanvasElements((prev) =>
+                                        prev.map((el) => (el.id === element.id ? { ...el, borderColor: v } : el))
+                                      );
+                                    }}
+                                  />
+                                  <select
+                                    className="border border-slate-300 rounded px-2 py-1 text-sm"
+                                    value={element.borderStyle || 'solid'}
+                                    onChange={(e) => {
+                                      const v = e.target.value as 'solid' | 'dashed';
+                                      setCanvasElements((prev) =>
+                                        prev.map((el) => (el.id === element.id ? { ...el, borderStyle: v } : el))
+                                      );
+                                    }}
+                                  >
+                                    <option value="solid">Continua</option>
+                                    <option value="dashed">Discontinua</option>
+                                  </select>
                                 </div>
                                 <button
                                   className={`px-2 py-1 text-sm rounded border ${
