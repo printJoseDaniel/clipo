@@ -14,6 +14,7 @@ function App() {
     fontFamily?: string;
     fontWeight?: 'normal' | 'bold';
     fontStyle?: 'normal' | 'italic';
+    borderRadius?: number; // 0-100 (porcentaje)
     width: number;
     height: number;
   };
@@ -89,6 +90,7 @@ function App() {
       fontFamily: 'Inter, system-ui, sans-serif',
       fontWeight: 'normal',
       fontStyle: 'normal',
+      borderRadius: 12,
       width: 200,
       height: 60,
     };
@@ -112,6 +114,7 @@ function App() {
               src: result,
               x: 250,
               y: 150,
+              borderRadius: 12,
               width: 200,
               height: 150,
             };
@@ -400,6 +403,7 @@ function App() {
                             fontFamily: element.fontFamily,
                             fontWeight: element.fontWeight,
                             fontStyle: element.fontStyle,
+                            borderRadius: `${element.borderRadius ?? 0}%`,
                           }}
                         >
                           {editingTextId === element.id ? (
@@ -455,6 +459,7 @@ function App() {
                           src={element.src}
                           alt="Canvas element"
                           className="rounded-lg shadow-md border border-slate-200 w-full h-full"
+                          style={{ borderRadius: `${element.borderRadius ?? 0}%` }}
                           draggable={false}
                         />
                       ) : null}
@@ -610,11 +615,52 @@ function App() {
                                 </button>
                               </div>
                             )}
+                            {/* Panel de formato general (esquinas redondeadas) */}
+                            <div
+                              className="absolute bg-white border border-slate-200 rounded-md shadow-lg p-3 z-10 flex items-center space-x-2"
+                              style={{
+                                top: 'calc(100% + 10px)',
+                                left: '50%',
+                                transform: 'translateX(-50%)',
+                              }}
+                              onMouseDown={(e) => e.stopPropagation()}
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              <label className="text-xs text-slate-600">Esquinas</label>
+                              <input
+                                type="range"
+                                min={0}
+                                max={100}
+                                step={1}
+                                value={Number(element.borderRadius ?? 0)}
+                                onChange={(e) => {
+                                  const v = Math.max(0, Math.min(100, parseInt(e.target.value, 10) || 0));
+                                  setCanvasElements((prev) =>
+                                    prev.map((el) => (el.id === element.id ? { ...el, borderRadius: v } : el))
+                                  );
+                                }}
+                              />
+                              <input
+                                type="number"
+                                className="w-16 border border-slate-300 rounded px-2 py-1 text-sm"
+                                min={0}
+                                max={100}
+                                step={1}
+                                value={Number(element.borderRadius ?? 0)}
+                                onChange={(e) => {
+                                  const v = Math.max(0, Math.min(100, parseInt(e.target.value, 10) || 0));
+                                  setCanvasElements((prev) =>
+                                    prev.map((el) => (el.id === element.id ? { ...el, borderRadius: v } : el))
+                                  );
+                                }}
+                              />
+                              <span className="text-xs text-slate-500">%</span>
+                            </div>
                             {element.type === 'text' && (
                               <div
                                 className="absolute bg-white border border-slate-200 rounded-md shadow-lg p-3 z-10 flex items-center space-x-2"
                                 style={{
-                                  top: 'calc(100% + 10px)',
+                                  top: 'calc(100% + 56px)',
                                   left: '50%',
                                   transform: 'translateX(-50%)',
                                 }}
