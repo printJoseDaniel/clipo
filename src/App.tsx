@@ -90,7 +90,7 @@ function App() {
       fontFamily: 'Inter, system-ui, sans-serif',
       fontWeight: 'normal',
       fontStyle: 'normal',
-      borderRadius: 12,
+      borderRadius: 0,
       width: 200,
       height: 60,
     };
@@ -124,10 +124,10 @@ function App() {
                 src: result,
                 x: 250,
                 y: 150,
-                borderRadius: 12,
-                width: w,
-                height: h,
-              };
+              borderRadius: 0,
+              width: w,
+              height: h,
+            };
               setCanvasElements((prev) => [...prev, newImage]);
             };
             img.src = result;
