@@ -213,33 +213,62 @@ function App() {
             const right = initialLeft + action.initialWidth;
             const bottom = initialTop + action.initialHeight;
 
-            let newWidth = action.initialWidth;
-            let newHeight = action.initialHeight;
-            let newLeft = initialLeft;
-            let newTop = initialTop;
-
+            // Raw new sizes before aspect constraints
+            let rawWidth = action.initialWidth;
+            let rawHeight = action.initialHeight;
             switch (action.resizeCorner) {
               case 'se':
-                newWidth = Math.max(minSize, action.initialWidth + deltaX);
-                newHeight = Math.max(minSize, action.initialHeight + deltaY);
+                rawWidth = action.initialWidth + deltaX;
+                rawHeight = action.initialHeight + deltaY;
+                break;
+              case 'ne':
+                rawWidth = action.initialWidth + deltaX;
+                rawHeight = action.initialHeight - deltaY;
+                break;
+              case 'sw':
+                rawWidth = action.initialWidth - deltaX;
+                rawHeight = action.initialHeight + deltaY;
+                break;
+              case 'nw':
+                rawWidth = action.initialWidth - deltaX;
+                rawHeight = action.initialHeight - deltaY;
+                break;
+            }
+
+            // Apply min size and optional proportional scaling (Alt)
+            const aspect = action.initialHeight > 0 ? action.initialWidth / action.initialHeight : 1;
+            let newWidth = Math.max(minSize, rawWidth);
+            let newHeight = Math.max(minSize, rawHeight);
+
+            if (e.altKey) {
+              const widthChange = Math.abs(rawWidth - action.initialWidth);
+              const heightChange = Math.abs(rawHeight - action.initialHeight);
+              if (widthChange >= heightChange) {
+                newWidth = Math.max(minSize, rawWidth);
+                newHeight = Math.max(minSize, Math.round(newWidth / aspect));
+              } else {
+                newHeight = Math.max(minSize, rawHeight);
+                newWidth = Math.max(minSize, Math.round(newHeight * aspect));
+              }
+            }
+
+            // Compute new position keeping opposite corner anchored
+            let newLeft = initialLeft;
+            let newTop = initialTop;
+            switch (action.resizeCorner) {
+              case 'se':
                 newLeft = initialLeft;
                 newTop = initialTop;
                 break;
               case 'ne':
-                newWidth = Math.max(minSize, action.initialWidth + deltaX);
-                newHeight = Math.max(minSize, action.initialHeight - deltaY);
                 newLeft = initialLeft;
                 newTop = bottom - newHeight;
                 break;
               case 'sw':
-                newWidth = Math.max(minSize, action.initialWidth - deltaX);
-                newHeight = Math.max(minSize, action.initialHeight + deltaY);
                 newLeft = right - newWidth;
                 newTop = initialTop;
                 break;
               case 'nw':
-                newWidth = Math.max(minSize, action.initialWidth - deltaX);
-                newHeight = Math.max(minSize, action.initialHeight - deltaY);
                 newLeft = right - newWidth;
                 newTop = bottom - newHeight;
                 break;
@@ -352,6 +381,7 @@ function App() {
                             className="absolute -right-2 -bottom-2 w-4 h-4 bg-blue-600 border-2 border-white rounded-full cursor-se-resize"
                             onMouseDown={(e) => {
                               e.stopPropagation();
+                              e.preventDefault();
                               setAction({
                                 type: 'resizing',
                                 elementId: element.id,
@@ -369,6 +399,7 @@ function App() {
                             className="absolute -left-2 -top-2 w-4 h-4 bg-blue-600 border-2 border-white rounded-full cursor-nwse-resize"
                             onMouseDown={(e) => {
                               e.stopPropagation();
+                              e.preventDefault();
                               setAction({
                                 type: 'resizing',
                                 elementId: element.id,
@@ -386,6 +417,7 @@ function App() {
                             className="absolute -right-2 -top-2 w-4 h-4 bg-blue-600 border-2 border-white rounded-full cursor-nesw-resize"
                             onMouseDown={(e) => {
                               e.stopPropagation();
+                              e.preventDefault();
                               setAction({
                                 type: 'resizing',
                                 elementId: element.id,
@@ -403,6 +435,7 @@ function App() {
                             className="absolute -left-2 -bottom-2 w-4 h-4 bg-blue-600 border-2 border-white rounded-full cursor-nesw-resize"
                             onMouseDown={(e) => {
                               e.stopPropagation();
+                              e.preventDefault();
                               setAction({
                                 type: 'resizing',
                                 elementId: element.id,
