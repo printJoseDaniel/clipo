@@ -376,9 +376,6 @@ function App() {
                         e.stopPropagation();
                         setSelectedElementId(element.id);
                         setShowEffectDropdown(false);
-                        if (element.type === 'text') {
-                          setEditingTextId(null);
-                        }
                       }}
                       onDoubleClick={(e) => {
                         if (element.type === 'text') {
@@ -409,7 +406,18 @@ function App() {
                             <div
                               contentEditable
                               suppressContentEditableWarning
-                              autoFocus
+                              ref={(el) => {
+                                if (el) {
+                                  el.focus();
+                                  // Colocar el cursor al final
+                                  const range = document.createRange();
+                                  range.selectNodeContents(el);
+                                  range.collapse(false);
+                                  const sel = window.getSelection();
+                                  sel?.removeAllRanges();
+                                  sel?.addRange(range);
+                                }
+                              }}
                               className="outline-none w-full text-center"
                               style={{
                                 fontFamily: element.fontFamily,
@@ -418,6 +426,8 @@ function App() {
                                 fontSize: element.fontSize,
                                 color: element.color,
                               }}
+                              onMouseDown={(e) => e.stopPropagation()}
+                              onClick={(e) => e.stopPropagation()}
                               onInput={(e) => {
                                 const text = (e.currentTarget as HTMLDivElement).innerText;
                                 setCanvasElements((prev) =>
