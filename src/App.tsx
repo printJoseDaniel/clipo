@@ -858,7 +858,11 @@ function App() {
                                   </button>
                                 </div>
                                 {showImageFiltersOptions && (
-                                  <div className="grid grid-cols-2 gap-2">
+                                  <div
+                                    className="grid grid-cols-2 gap-2 max-h-64 overflow-y-auto pr-2"
+                                    style={{ overscrollBehavior: 'contain' }}
+                                    onWheel={(e) => e.stopPropagation()}
+                                  >
                                     <label className="text-xs text-slate-600 col-span-2">Brillo</label>
                                     <input type="range" min={0} max={200} step={1}
                                       value={Number(element.brightness ?? 100)}
