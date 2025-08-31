@@ -19,6 +19,15 @@ function App() {
     borderColor?: string;
     borderStyle?: 'solid' | 'dashed';
     backgroundColor?: string; // for text box background
+    // Imagen: filtros y transparencia
+    opacity?: number; // 0-100
+    brightness?: number; // 0-200
+    contrast?: number; // 0-200
+    saturate?: number; // 0-200
+    hueRotate?: number; // 0-360
+    grayscale?: number; // 0-100
+    sepia?: number; // 0-100
+    blur?: number; // 0-10 px
     width: number;
     height: number;
   };
@@ -28,6 +37,10 @@ function App() {
   const [showEffectDropdown, setShowEffectDropdown] = useState<boolean>(false);
   const [editingTextId, setEditingTextId] = useState<number | null>(null);
   const [showCornersOptions, setShowCornersOptions] = useState<boolean>(false);
+  const [showImageCornersOptions, setShowImageCornersOptions] = useState<boolean>(false);
+  const [showImageBorderOptions, setShowImageBorderOptions] = useState<boolean>(false);
+  const [showImageFiltersOptions, setShowImageFiltersOptions] = useState<boolean>(false);
+  const [showImageOpacityOptions, setShowImageOpacityOptions] = useState<boolean>(false);
   
   // Estado para gestionar acciones de movimiento y redimensionamiento
   const [action, setAction] = useState<{
@@ -148,6 +161,18 @@ function App() {
                 x: centerX,
                 y: centerY,
                 borderRadius: 0,
+                borderWidth: 0,
+                borderColor: '#e2e8f0',
+                borderStyle: 'solid',
+                backgroundColor: 'transparent',
+                opacity: 100,
+                brightness: 100,
+                contrast: 100,
+                saturate: 100,
+                hueRotate: 0,
+                grayscale: 0,
+                sepia: 0,
+                blur: 0,
                 width: w,
                 height: h,
               };
@@ -415,6 +440,10 @@ function App() {
                         setSelectedElementId(element.id);
                         setShowEffectDropdown(false);
                         setShowCornersOptions(false);
+                        setShowImageCornersOptions(false);
+                        setShowImageBorderOptions(false);
+                        setShowImageFiltersOptions(false);
+                        setShowImageOpacityOptions(false);
                       }}
                       onDoubleClick={(e) => {
                         if (element.type === 'text') {
@@ -495,13 +524,28 @@ function App() {
                           )}
                         </div>
                       ) : element.type === 'image' ? (
-                        <img
-                          src={element.src}
-                          alt="Canvas element"
-                          className="rounded-lg shadow-md border border-slate-200 w-full h-full"
-                          style={{ borderRadius: `${element.borderRadius ?? 0}%` }}
-                          draggable={false}
-                        />
+                        <div
+                          className="w-full h-full shadow-md"
+                          style={{
+                            borderRadius: `${element.borderRadius ?? 0}%`,
+                            borderWidth: (element.borderWidth ?? 0) + 'px',
+                            borderColor: element.borderColor ?? '#e2e8f0',
+                            borderStyle: element.borderStyle ?? 'solid',
+                            backgroundColor: element.backgroundColor ?? 'transparent',
+                            overflow: 'hidden',
+                          }}
+                        >
+                          <img
+                            src={element.src}
+                            alt="Canvas element"
+                            className="w-full h-full block"
+                            style={{
+                              filter: `brightness(${element.brightness ?? 100}%) contrast(${element.contrast ?? 100}%) saturate(${element.saturate ?? 100}%) hue-rotate(${element.hueRotate ?? 0}deg) grayscale(${element.grayscale ?? 0}%) sepia(${element.sepia ?? 0}%) blur(${element.blur ?? 0}px)`,
+                              opacity: Math.max(0, Math.min(100, element.opacity ?? 100)) / 100,
+                            }}
+                            draggable={false}
+                          />
+                        </div>
                       ) : null}
 
                       {selectedElementId === element.id && (
@@ -653,6 +697,226 @@ function App() {
                                 >
                                   🗑️ Eliminar elemento
                                 </button>
+                              </div>
+                            )}
+                            {element.type === 'image' && (
+                              <div
+                                className="absolute bg-white border border-slate-200 rounded-md shadow-lg p-3 z-10 flex flex-col space-y-2 text-black"
+                                style={{
+                                  top: 'calc(100% + 10px)',
+                                  left: '50%',
+                                  transform: 'translateX(-50%)',
+                                  color: '#000',
+                                  minWidth: '280px',
+                                }}
+                                onMouseDown={(e) => e.stopPropagation()}
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                <div className="flex items-center justify-between">
+                                  <span className="text-xs text-slate-600">Esquinas</span>
+                                  <button
+                                    className="px-2 py-1 text-xs rounded border border-slate-300 bg-white text-black"
+                                    onClick={() => setShowImageCornersOptions((v) => !v)}
+                                  >
+                                    {showImageCornersOptions ? 'Ocultar' : 'Mostrar'}
+                                  </button>
+                                </div>
+                                {showImageCornersOptions && (
+                                  <div className="flex items-center space-x-2">
+                                    <input
+                                      type="range"
+                                      min={0}
+                                      max={100}
+                                      step={1}
+                                      value={Number(element.borderRadius ?? 0)}
+                                      onChange={(e) => {
+                                        const v = Math.max(0, Math.min(100, parseInt(e.target.value, 10) || 0));
+                                        setCanvasElements((prev) =>
+                                          prev.map((el) => (el.id === element.id ? { ...el, borderRadius: v } : el))
+                                        );
+                                      }}
+                                    />
+                                    <input
+                                      type="number"
+                                      className="w-16 border border-slate-300 rounded px-2 py-1 text-sm bg-white text-black"
+                                      min={0}
+                                      max={100}
+                                      step={1}
+                                      value={Number(element.borderRadius ?? 0)}
+                                      onChange={(e) => {
+                                        const v = Math.max(0, Math.min(100, parseInt(e.target.value, 10) || 0));
+                                        setCanvasElements((prev) =>
+                                          prev.map((el) => (el.id === element.id ? { ...el, borderRadius: v } : el))
+                                        );
+                                      }}
+                                    />
+                                    <span className="text-xs text-slate-500">%</span>
+                                  </div>
+                                )}
+
+                                <div className="flex items-center justify-between">
+                                  <span className="text-xs text-slate-600">Borde</span>
+                                  <button
+                                    className="px-2 py-1 text-xs rounded border border-slate-300 bg-white text-black"
+                                    onClick={() => setShowImageBorderOptions((v) => !v)}
+                                  >
+                                    {showImageBorderOptions ? 'Ocultar' : 'Mostrar'}
+                                  </button>
+                                </div>
+                                {showImageBorderOptions && (
+                                  <div className="flex items-center space-x-2">
+                                    <input
+                                      type="number"
+                                      className="w-16 border border-slate-300 rounded px-2 py-1 text-sm bg-white text-black"
+                                      min={0}
+                                      max={20}
+                                      step={1}
+                                      value={Number(element.borderWidth ?? 0)}
+                                      onChange={(e) => {
+                                        const v = Math.max(0, Math.min(20, parseInt(e.target.value, 10) || 0));
+                                        setCanvasElements((prev) =>
+                                          prev.map((el) => (el.id === element.id ? { ...el, borderWidth: v } : el))
+                                        );
+                                      }}
+                                    />
+                                    <input
+                                      type="color"
+                                      className="w-8 h-8 p-0 border border-slate-300 rounded bg-white"
+                                      value={element.borderColor || '#e2e8f0'}
+                                      onChange={(e) => {
+                                        const v = e.target.value;
+                                        setCanvasElements((prev) =>
+                                          prev.map((el) => (el.id === element.id ? { ...el, borderColor: v } : el))
+                                        );
+                                      }}
+                                    />
+                                    <select
+                                      className="border border-slate-300 rounded px-2 py-1 text-sm bg-white text-black"
+                                      value={element.borderStyle || 'solid'}
+                                      onChange={(e) => {
+                                        const v = e.target.value as 'solid' | 'dashed';
+                                        setCanvasElements((prev) =>
+                                          prev.map((el) => (el.id === element.id ? { ...el, borderStyle: v } : el))
+                                        );
+                                      }}
+                                    >
+                                      <option value="solid">Continua</option>
+                                      <option value="dashed">Discontinua</option>
+                                    </select>
+                                  </div>
+                                )}
+
+                                <div className="flex items-center justify-between">
+                                  <span className="text-xs text-slate-600">Transparencia</span>
+                                  <button
+                                    className="px-2 py-1 text-xs rounded border border-slate-300 bg-white text-black"
+                                    onClick={() => setShowImageOpacityOptions((v) => !v)}
+                                  >
+                                    {showImageOpacityOptions ? 'Ocultar' : 'Mostrar'}
+                                  </button>
+                                </div>
+                                {showImageOpacityOptions && (
+                                  <div className="flex items-center space-x-2">
+                                    <input
+                                      type="range"
+                                      min={0}
+                                      max={100}
+                                      step={1}
+                                      value={Number(element.opacity ?? 100)}
+                                      onChange={(e) => {
+                                        const v = Math.max(0, Math.min(100, parseInt(e.target.value, 10) || 0));
+                                        setCanvasElements((prev) =>
+                                          prev.map((el) => (el.id === element.id ? { ...el, opacity: v } : el))
+                                        );
+                                      }}
+                                    />
+                                    <input
+                                      type="number"
+                                      className="w-16 border border-slate-300 rounded px-2 py-1 text-sm bg-white text-black"
+                                      min={0}
+                                      max={100}
+                                      step={1}
+                                      value={Number(element.opacity ?? 100)}
+                                      onChange={(e) => {
+                                        const v = Math.max(0, Math.min(100, parseInt(e.target.value, 10) || 0));
+                                        setCanvasElements((prev) =>
+                                          prev.map((el) => (el.id === element.id ? { ...el, opacity: v } : el))
+                                        );
+                                      }}
+                                    />
+                                    <span className="text-xs text-slate-500">%</span>
+                                  </div>
+                                )}
+
+                                <div className="flex items-center justify-between">
+                                  <span className="text-xs text-slate-600">Filtros</span>
+                                  <button
+                                    className="px-2 py-1 text-xs rounded border border-slate-300 bg-white text-black"
+                                    onClick={() => setShowImageFiltersOptions((v) => !v)}
+                                  >
+                                    {showImageFiltersOptions ? 'Ocultar' : 'Mostrar'}
+                                  </button>
+                                </div>
+                                {showImageFiltersOptions && (
+                                  <div className="grid grid-cols-2 gap-2">
+                                    <label className="text-xs text-slate-600 col-span-2">Brillo</label>
+                                    <input type="range" min={0} max={200} step={1}
+                                      value={Number(element.brightness ?? 100)}
+                                      onChange={(e) => {
+                                        const v = Math.max(0, Math.min(200, parseInt(e.target.value, 10) || 0));
+                                        setCanvasElements((prev) => prev.map((el) => el.id === element.id ? { ...el, brightness: v } : el));
+                                      }}
+                                    />
+                                    <label className="text-xs text-slate-600 col-span-2">Contraste</label>
+                                    <input type="range" min={0} max={200} step={1}
+                                      value={Number(element.contrast ?? 100)}
+                                      onChange={(e) => {
+                                        const v = Math.max(0, Math.min(200, parseInt(e.target.value, 10) || 0));
+                                        setCanvasElements((prev) => prev.map((el) => el.id === element.id ? { ...el, contrast: v } : el));
+                                      }}
+                                    />
+                                    <label className="text-xs text-slate-600 col-span-2">Saturación</label>
+                                    <input type="range" min={0} max={200} step={1}
+                                      value={Number(element.saturate ?? 100)}
+                                      onChange={(e) => {
+                                        const v = Math.max(0, Math.min(200, parseInt(e.target.value, 10) || 0));
+                                        setCanvasElements((prev) => prev.map((el) => el.id === element.id ? { ...el, saturate: v } : el));
+                                      }}
+                                    />
+                                    <label className="text-xs text-slate-600 col-span-2">Tono (Hue)</label>
+                                    <input type="range" min={0} max={360} step={1}
+                                      value={Number(element.hueRotate ?? 0)}
+                                      onChange={(e) => {
+                                        const v = Math.max(0, Math.min(360, parseInt(e.target.value, 10) || 0));
+                                        setCanvasElements((prev) => prev.map((el) => el.id === element.id ? { ...el, hueRotate: v } : el));
+                                      }}
+                                    />
+                                    <label className="text-xs text-slate-600 col-span-2">Grises</label>
+                                    <input type="range" min={0} max={100} step={1}
+                                      value={Number(element.grayscale ?? 0)}
+                                      onChange={(e) => {
+                                        const v = Math.max(0, Math.min(100, parseInt(e.target.value, 10) || 0));
+                                        setCanvasElements((prev) => prev.map((el) => el.id === element.id ? { ...el, grayscale: v } : el));
+                                      }}
+                                    />
+                                    <label className="text-xs text-slate-600 col-span-2">Sepia</label>
+                                    <input type="range" min={0} max={100} step={1}
+                                      value={Number(element.sepia ?? 0)}
+                                      onChange={(e) => {
+                                        const v = Math.max(0, Math.min(100, parseInt(e.target.value, 10) || 0));
+                                        setCanvasElements((prev) => prev.map((el) => el.id === element.id ? { ...el, sepia: v } : el));
+                                      }}
+                                    />
+                                    <label className="text-xs text-slate-600 col-span-2">Desenfoque</label>
+                                    <input type="range" min={0} max={10} step={1}
+                                      value={Number(element.blur ?? 0)}
+                                      onChange={(e) => {
+                                        const v = Math.max(0, Math.min(10, parseInt(e.target.value, 10) || 0));
+                                        setCanvasElements((prev) => prev.map((el) => el.id === element.id ? { ...el, blur: v } : el));
+                                      }}
+                                    />
+                                  </div>
+                                )}
                               </div>
                             )}
                             {element.type === 'text' && (
