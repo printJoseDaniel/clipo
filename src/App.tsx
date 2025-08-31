@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Type, Image, Upload, MousePointer, Square, Circle, Minus } from 'lucide-react';
 
 function App() {
@@ -6,7 +6,7 @@ function App() {
     id: number;
     type: 'text' | 'image';
     content?: string;
-    src?: string | ArrayBuffer | null;
+    src?: string;
     x: number;
     y: number;
     fontSize?: number;
@@ -27,6 +27,9 @@ function App() {
     initialY: number;
     initialWidth: number;
     initialHeight: number;
+    initialLeft?: number;
+    initialTop?: number;
+    resizeCorner?: 'nw' | 'ne' | 'sw' | 'se' | null;
   }>({
     type: null,
     elementId: null,
@@ -34,10 +37,29 @@ function App() {
     initialY: 0,
     initialWidth: 0,
     initialHeight: 0,
+    initialLeft: 0,
+    initialTop: 0,
+    resizeCorner: null,
   });
+
+  // Asegurar que al soltar el ratón en cualquier lugar se termine la acción
+  useEffect(() => {
+    const handleWindowMouseUp = () => {
+      setAction({
+        type: null,
+        elementId: null,
+        initialX: 0,
+        initialY: 0,
+        initialWidth: 0,
+        initialHeight: 0,
+      });
+    };
+    window.addEventListener('mouseup', handleWindowMouseUp);
+    return () => window.removeEventListener('mouseup', handleWindowMouseUp);
+  }, []);
   
   const handleAddText = () => {
-    const newText = {
+    const newText: CanvasElement = {
       id: Date.now(),
       type: 'text',
       content: 'Haz clic para editar',
@@ -48,7 +70,7 @@ function App() {
       width: 200,
       height: 60,
     };
-    setCanvasElements([...canvasElements, newText]);
+    setCanvasElements((prev) => [...prev, newText]);
   };
 
   const handleImageUpload = () => {
@@ -60,16 +82,19 @@ function App() {
       if (file) {
         const reader = new FileReader();
         reader.onload = (event) => {
-          const newImage = {
-            id: Date.now(),
-            type: 'image',
-            src: event.target?.result,
-            x: 250,
-            y: 150,
-            width: 200,
-            height: 150
-          };
-          setCanvasElements([...canvasElements, newImage]);
+          const result = event.target?.result;
+          if (typeof result === 'string') {
+            const newImage: CanvasElement = {
+              id: Date.now(),
+              type: 'image',
+              src: result,
+              x: 250,
+              y: 150,
+              width: 200,
+              height: 150,
+            };
+            setCanvasElements((prev) => [...prev, newImage]);
+          }
         };
         reader.readAsDataURL(file);
       }
@@ -167,28 +192,63 @@ function App() {
 
         {/* Canvas Container */}
         <div className="h-[calc(100vh-4rem)] flex items-center justify-center p-8 bg-gradient-to-br from-slate-50 to-slate-100"
-          // Añado manejadores 
         onMouseMove={(e) => {
+          // Solo mover/redimensionar mientras el botón izquierdo está presionado
+          if ((e.buttons & 1) !== 1) return;
+
           if (action.type === 'moving' && action.elementId) {
             const newX = e.clientX - action.initialX;
             const newY = e.clientY - action.initialY;
 
-            setCanvasElements(
-              canvasElements.map((el) =>
-                el.id === action.elementId ? { ...el, x: newX, y: newY } : el
-              )
+            setCanvasElements((prev) =>
+              prev.map((el) => (el.id === action.elementId ? { ...el, x: newX, y: newY } : el))
             );
-          } else if (action.type === 'resizing' && action.elementId) {
+          } else if (action.type === 'resizing' && action.elementId && action.resizeCorner) {
             const deltaX = e.clientX - action.initialX;
             const deltaY = e.clientY - action.initialY;
+            const minSize = 20;
 
-            const newWidth = Math.max(20, action.initialWidth + deltaX);
-            const newHeight = Math.max(20, action.initialHeight + deltaY);
+            const initialLeft = action.initialLeft ?? 0;
+            const initialTop = action.initialTop ?? 0;
+            const right = initialLeft + action.initialWidth;
+            const bottom = initialTop + action.initialHeight;
 
-            setCanvasElements(
-              canvasElements.map((el) =>
+            let newWidth = action.initialWidth;
+            let newHeight = action.initialHeight;
+            let newLeft = initialLeft;
+            let newTop = initialTop;
+
+            switch (action.resizeCorner) {
+              case 'se':
+                newWidth = Math.max(minSize, action.initialWidth + deltaX);
+                newHeight = Math.max(minSize, action.initialHeight + deltaY);
+                newLeft = initialLeft;
+                newTop = initialTop;
+                break;
+              case 'ne':
+                newWidth = Math.max(minSize, action.initialWidth + deltaX);
+                newHeight = Math.max(minSize, action.initialHeight - deltaY);
+                newLeft = initialLeft;
+                newTop = bottom - newHeight;
+                break;
+              case 'sw':
+                newWidth = Math.max(minSize, action.initialWidth - deltaX);
+                newHeight = Math.max(minSize, action.initialHeight + deltaY);
+                newLeft = right - newWidth;
+                newTop = initialTop;
+                break;
+              case 'nw':
+                newWidth = Math.max(minSize, action.initialWidth - deltaX);
+                newHeight = Math.max(minSize, action.initialHeight - deltaY);
+                newLeft = right - newWidth;
+                newTop = bottom - newHeight;
+                break;
+            }
+
+            setCanvasElements((prev) =>
+              prev.map((el) =>
                 el.id === action.elementId
-                  ? { ...el, width: newWidth, height: newHeight }
+                  ? { ...el, x: newLeft, y: newTop, width: newWidth, height: newHeight }
                   : el
               )
             );
@@ -248,6 +308,7 @@ function App() {
                       className="absolute cursor-move hover:shadow-lg transition-shadow duration-200 relative"
                       onMouseDown={(e) => {
                         e.stopPropagation();
+                        e.preventDefault();
                         setAction({
                           type: 'moving',
                           elementId: element.id,
@@ -280,11 +341,13 @@ function App() {
                           src={element.src}
                           alt="Canvas element"
                           className="rounded-lg shadow-md border border-slate-200 w-full h-full"
+                          draggable={false}
                         />
                       ) : null}
 
                       {selectedElementId === element.id && (
                         <>
+                          {/* Esquinas de redimensionado */}
                           <div
                             className="absolute -right-2 -bottom-2 w-4 h-4 bg-blue-600 border-2 border-white rounded-full cursor-se-resize"
                             onMouseDown={(e) => {
@@ -296,6 +359,60 @@ function App() {
                                 initialY: e.clientY,
                                 initialWidth: element.width || 0,
                                 initialHeight: element.height || 0,
+                                initialLeft: element.x,
+                                initialTop: element.y,
+                                resizeCorner: 'se',
+                              });
+                            }}
+                          />
+                          <div
+                            className="absolute -left-2 -top-2 w-4 h-4 bg-blue-600 border-2 border-white rounded-full cursor-nwse-resize"
+                            onMouseDown={(e) => {
+                              e.stopPropagation();
+                              setAction({
+                                type: 'resizing',
+                                elementId: element.id,
+                                initialX: e.clientX,
+                                initialY: e.clientY,
+                                initialWidth: element.width || 0,
+                                initialHeight: element.height || 0,
+                                initialLeft: element.x,
+                                initialTop: element.y,
+                                resizeCorner: 'nw',
+                              });
+                            }}
+                          />
+                          <div
+                            className="absolute -right-2 -top-2 w-4 h-4 bg-blue-600 border-2 border-white rounded-full cursor-nesw-resize"
+                            onMouseDown={(e) => {
+                              e.stopPropagation();
+                              setAction({
+                                type: 'resizing',
+                                elementId: element.id,
+                                initialX: e.clientX,
+                                initialY: e.clientY,
+                                initialWidth: element.width || 0,
+                                initialHeight: element.height || 0,
+                                initialLeft: element.x,
+                                initialTop: element.y,
+                                resizeCorner: 'ne',
+                              });
+                            }}
+                          />
+                          <div
+                            className="absolute -left-2 -bottom-2 w-4 h-4 bg-blue-600 border-2 border-white rounded-full cursor-nesw-resize"
+                            onMouseDown={(e) => {
+                              e.stopPropagation();
+                              setAction({
+                                type: 'resizing',
+                                elementId: element.id,
+                                initialX: e.clientX,
+                                initialY: e.clientY,
+                                initialWidth: element.width || 0,
+                                initialHeight: element.height || 0,
+                                initialLeft: element.x,
+                                initialTop: element.y,
+                                resizeCorner: 'sw',
                               });
                             }}
                           />
