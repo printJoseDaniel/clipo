@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Type, Image as ImageIcon, Upload, MousePointer, Square, Circle, Minus } from 'lucide-react';
 
 function App() {
@@ -78,21 +78,30 @@ function App() {
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [selectedElementId, editingTextId]);
   
+  const canvasAreaRef = useRef<HTMLDivElement | null>(null);
+
   const handleAddText = () => {
+    const defaultWidth = 200;
+    const defaultHeight = 60;
+    const cw = canvasAreaRef.current?.clientWidth ?? 0;
+    const ch = canvasAreaRef.current?.clientHeight ?? 0;
+    const centerX = Math.max(0, Math.round((cw - defaultWidth) / 2));
+    const centerY = Math.max(0, Math.round((ch - defaultHeight) / 2));
+
     const newText: CanvasElement = {
       id: Date.now(),
       type: 'text',
       content: 'Haz doble clic para editar',
-      x: 300,
-      y: 200,
+      x: centerX,
+      y: centerY,
       fontSize: 24,
       color: '#333333',
       fontFamily: 'Inter, system-ui, sans-serif',
       fontWeight: 'normal',
       fontStyle: 'normal',
       borderRadius: 0,
-      width: 200,
-      height: 60,
+      width: defaultWidth,
+      height: defaultHeight,
     };
     setCanvasElements((prev) => [...prev, newText]);
   };
@@ -118,16 +127,21 @@ function App() {
               w = Math.max(20, Math.round(w * scale));
               h = Math.max(20, Math.round(h * scale));
 
+              const cw = canvasAreaRef.current?.clientWidth ?? 0;
+              const ch = canvasAreaRef.current?.clientHeight ?? 0;
+              const centerX = Math.max(0, Math.round((cw - w) / 2));
+              const centerY = Math.max(0, Math.round((ch - h) / 2));
+
               const newImage: CanvasElement = {
                 id: Date.now(),
                 type: 'image',
                 src: result,
-                x: 250,
-                y: 150,
-              borderRadius: 0,
-              width: w,
-              height: h,
-            };
+                x: centerX,
+                y: centerY,
+                borderRadius: 0,
+                width: w,
+                height: h,
+              };
               setCanvasElements((prev) => [...prev, newImage]);
             };
             img.src = result;
@@ -352,7 +366,7 @@ function App() {
             </div>
 
             {/* Canvas Content */}
-            <div className="relative w-full h-full p-8" onClick={() => setSelectedElementId(null)}>
+            <div className="relative w-full h-full p-8" ref={canvasAreaRef} onClick={() => setSelectedElementId(null)}>
               {canvasElements.length === 0 ? (
                 <div className="flex flex-col items-center justify-center h-full text-center">
                   <div className="w-16 h-16 bg-gradient-to-br from-blue-100 to-blue-200 rounded-full flex items-center justify-center mb-4 group-hover:scale-110 transition-transform duration-300">
