@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Type, Image, Upload, MousePointer, Square, Circle, Minus } from 'lucide-react';
+import { Type, Image as ImageIcon, Upload, MousePointer, Square, Circle, Minus } from 'lucide-react';
 
 function App() {
   type CanvasElement = {
@@ -108,17 +108,29 @@ function App() {
         reader.onload = (event) => {
           const result = event.target?.result;
           if (typeof result === 'string') {
-            const newImage: CanvasElement = {
-              id: Date.now(),
-              type: 'image',
-              src: result,
-              x: 250,
-              y: 150,
-              borderRadius: 12,
-              width: 200,
-              height: 150,
+            const img = new window.Image();
+            img.onload = () => {
+              const maxW = 400;
+              const maxH = 300;
+              let w = img.naturalWidth || 200;
+              let h = img.naturalHeight || 150;
+              const scale = Math.min(maxW / w, maxH / h, 1);
+              w = Math.max(20, Math.round(w * scale));
+              h = Math.max(20, Math.round(h * scale));
+
+              const newImage: CanvasElement = {
+                id: Date.now(),
+                type: 'image',
+                src: result,
+                x: 250,
+                y: 150,
+                borderRadius: 12,
+                width: w,
+                height: h,
+              };
+              setCanvasElements((prev) => [...prev, newImage]);
             };
-            setCanvasElements((prev) => [...prev, newImage]);
+            img.src = result;
           }
         };
         reader.readAsDataURL(file);
@@ -157,7 +169,7 @@ function App() {
               onClick={handleImageUpload}
               className="w-full bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-700 hover:to-emerald-800 text-white px-4 py-3 rounded-xl font-medium transition-all duration-300 transform hover:scale-105 hover:shadow-lg hover:shadow-emerald-500/25 flex items-center justify-center space-x-2"
             >
-              <Image className="w-5 h-5" />
+              <ImageIcon className="w-5 h-5" />
               <span>Subir una imagen</span>
             </button>
           </div>
