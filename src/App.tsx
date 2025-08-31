@@ -422,10 +422,29 @@ function App() {
                       className="absolute cursor-move hover:shadow-lg transition-shadow duration-200 relative"
                       onMouseDown={(e) => {
                         e.stopPropagation();
-                        // Si estamos editando texto (o doble clic), no impedir el foco ni iniciar movimiento
+                        // Si estamos editando texto (o doble clic), no iniciar movimiento
                         if (editingTextId === element.id || e.detail >= 2) return;
-                        // Prevenir selección de texto/imagen cuando sí vamos a mover
+                        // Prevenir selección de texto/imagen
                         e.preventDefault();
+
+                        // Alt + arrastrar => duplicar y mover la copia
+                        if (e.altKey) {
+                          const cloneId = Date.now();
+                          const clone: CanvasElement = { ...element, id: cloneId };
+                          setCanvasElements((prev) => [...prev, clone]);
+                          setSelectedElementId(cloneId);
+                          setAction({
+                            type: 'moving',
+                            elementId: cloneId,
+                            initialX: e.clientX - (clone.x ?? 0),
+                            initialY: e.clientY - (clone.y ?? 0),
+                            initialWidth: clone.width || 0,
+                            initialHeight: clone.height || 0,
+                          });
+                          return;
+                        }
+
+                        // Comportamiento normal: mover el elemento original
                         setAction({
                           type: 'moving',
                           elementId: element.id,
