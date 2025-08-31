@@ -41,6 +41,21 @@ function App() {
   const [showImageBorderOptions, setShowImageBorderOptions] = useState<boolean>(false);
   const [showImageFiltersOptions, setShowImageFiltersOptions] = useState<boolean>(false);
   const [showImageOpacityOptions, setShowImageOpacityOptions] = useState<boolean>(false);
+  const [showBackgroundPanel, setShowBackgroundPanel] = useState<boolean>(false);
+  const [backgroundColor, setBackgroundColor] = useState<string>("#ffffff");
+  const [backgroundOpacity, setBackgroundOpacity] = useState<number>(100);
+
+  const hexToRgba = (hex: string, alphaPercent: number) => {
+    let h = hex.replace('#', '');
+    if (h.length === 3) {
+      h = h.split('').map((c) => c + c).join('');
+    }
+    const r = parseInt(h.substring(0, 2), 16);
+    const g = parseInt(h.substring(2, 4), 16);
+    const b = parseInt(h.substring(4, 6), 16);
+    const a = Math.max(0, Math.min(100, alphaPercent)) / 100;
+    return `rgba(${r}, ${g}, ${b}, ${a})`;
+  };
   
   // Estado para gestionar acciones de movimiento y redimensionamiento
   const [action, setAction] = useState<{
@@ -390,7 +405,10 @@ function App() {
         }}>
         
           {/* Interactive Canvas Zone */}
-          <div className="relative w-[60%] h-[70%] bg-white rounded-2xl shadow-2xl border-2 border-dashed border-slate-300 hover:border-blue-400 transition-all duration-300 cursor-pointer group overflow-hidden">
+          <div
+            className="relative w-[60%] h-[70%] rounded-2xl shadow-2xl border-2 border-dashed border-slate-300 hover:border-blue-400 transition-all duration-300 cursor-pointer group overflow-hidden"
+            style={{ backgroundColor: hexToRgba(backgroundColor, backgroundOpacity) }}
+          >
             {/* Canvas Background Pattern */}
             <div className="absolute inset-0 opacity-5">
               <div className="w-full h-full" style={{
@@ -400,7 +418,20 @@ function App() {
             </div>
 
             {/* Canvas Content */}
-            <div className="relative w-full h-full p-8" ref={canvasAreaRef} onClick={() => setSelectedElementId(null)}>
+            <div
+              className="relative w-full h-full p-8"
+              ref={canvasAreaRef}
+              onClick={() => {
+                setSelectedElementId(null);
+                setShowEffectDropdown(false);
+                setShowCornersOptions(false);
+                setShowImageCornersOptions(false);
+                setShowImageBorderOptions(false);
+                setShowImageFiltersOptions(false);
+                setShowImageOpacityOptions(false);
+                setShowBackgroundPanel(true);
+              }}
+            >
               {canvasElements.length === 0 ? (
                 <div className="flex flex-col items-center justify-center h-full text-center">
                   <div className="w-16 h-16 bg-gradient-to-br from-blue-100 to-blue-200 rounded-full flex items-center justify-center mb-4 group-hover:scale-110 transition-transform duration-300">
@@ -463,6 +494,7 @@ function App() {
                         setShowImageBorderOptions(false);
                         setShowImageFiltersOptions(false);
                         setShowImageOpacityOptions(false);
+                        setShowBackgroundPanel(false);
                       }}
                       onDoubleClick={(e) => {
                         if (element.type === 'text') {
@@ -1170,6 +1202,51 @@ function App() {
           </div>
         </div>
       </div>
+      {/* Background settings panel (top, when clicking background) */}
+      {showBackgroundPanel && (
+        <div
+          className="absolute top-16 left-1/2 -translate-x-1/2 bg-white text-black border border-slate-200 rounded-md shadow-lg p-3 z-20 flex items-center space-x-3"
+          onMouseDown={(e) => e.stopPropagation()}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="flex items-center space-x-2">
+            <label className="text-xs text-slate-600">Color</label>
+            <input
+              type="color"
+              className="w-8 h-8 p-0 border border-slate-300 rounded bg-white"
+              value={backgroundColor}
+              onChange={(e) => setBackgroundColor(e.target.value)}
+            />
+          </div>
+          <div className="flex items-center space-x-2">
+            <label className="text-xs text-slate-600">Transparencia</label>
+            <input
+              type="range"
+              min={0}
+              max={100}
+              step={1}
+              value={backgroundOpacity}
+              onChange={(e) => setBackgroundOpacity(Math.max(0, Math.min(100, parseInt(e.target.value, 10) || 0)))}
+            />
+            <input
+              type="number"
+              className="w-16 border border-slate-300 rounded px-2 py-1 text-sm bg-white text-black"
+              min={0}
+              max={100}
+              step={1}
+              value={backgroundOpacity}
+              onChange={(e) => setBackgroundOpacity(Math.max(0, Math.min(100, parseInt(e.target.value, 10) || 0)))}
+            />
+            <span className="text-xs text-slate-500">%</span>
+          </div>
+          <button
+            className="px-2 py-1 text-sm rounded border border-slate-300 bg-white text-black"
+            onClick={() => setShowBackgroundPanel(false)}
+          >
+            Cerrar
+          </button>
+        </div>
+      )}
     </div>
   );
 }
