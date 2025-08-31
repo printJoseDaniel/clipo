@@ -44,6 +44,8 @@ function App() {
   const [showBackgroundPanel, setShowBackgroundPanel] = useState<boolean>(false);
   const [backgroundColor, setBackgroundColor] = useState<string>("#ffffff");
   const [backgroundOpacity, setBackgroundOpacity] = useState<number>(100);
+  const [backgroundImage, setBackgroundImage] = useState<string | null>(null);
+  const [showBackgroundImageDialog, setShowBackgroundImageDialog] = useState<boolean>(false);
 
   const hexToRgba = (hex: string, alphaPercent: number) => {
     let h = hex.replace('#', '');
@@ -407,7 +409,13 @@ function App() {
           {/* Interactive Canvas Zone */}
           <div
             className="relative w-[60%] h-[70%] rounded-2xl shadow-2xl border-2 border-dashed border-slate-300 hover:border-blue-400 transition-all duration-300 cursor-pointer group overflow-hidden"
-            style={{ backgroundColor: hexToRgba(backgroundColor, backgroundOpacity) }}
+            style={{
+              backgroundColor: hexToRgba(backgroundColor, backgroundOpacity),
+              backgroundImage: backgroundImage ? `url(${backgroundImage})` : undefined,
+              backgroundSize: backgroundImage ? 'cover' : undefined,
+              backgroundRepeat: backgroundImage ? 'no-repeat' : undefined,
+              backgroundPosition: backgroundImage ? 'center' : undefined,
+            }}
           >
             {/* Canvas Background Pattern */}
             <div className="absolute inset-0 opacity-5">
@@ -432,11 +440,17 @@ function App() {
                 setShowBackgroundPanel(true);
               }}
             >
-              {canvasElements.length === 0 ? (
+              {canvasElements.length === 0 && !backgroundImage ? (
                 <div className="flex flex-col items-center justify-center h-full text-center">
-                  <div className="w-16 h-16 bg-gradient-to-br from-blue-100 to-blue-200 rounded-full flex items-center justify-center mb-4 group-hover:scale-110 transition-transform duration-300">
+                  <button
+                    className="w-16 h-16 bg-gradient-to-br from-blue-100 to-blue-200 rounded-full flex items-center justify-center mb-4 group-hover:scale-110 transition-transform duration-300"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setShowBackgroundImageDialog(true);
+                    }}
+                  >
                     <Upload className="w-8 h-8 text-blue-600" />
-                  </div>
+                  </button>
                   <h3 className="text-xl font-semibold text-slate-700 mb-2">
                     Haz clic para cambiar el color de fondo
                   </h3>
@@ -444,6 +458,78 @@ function App() {
                   <p className="text-sm text-slate-400">
                     Usa las herramientas de la izquierda para añadir contenido
                   </p>
+
+                  {showBackgroundImageDialog && (
+                    <div
+                      className="mt-6 inline-flex flex-col items-stretch space-y-2 bg-white text-black border border-slate-200 rounded-lg shadow-lg p-4"
+                      onClick={(e) => e.stopPropagation()}
+                      onMouseDown={(e) => e.stopPropagation()}
+                    >
+                      <span className="text-sm font-medium mb-1">Subir imagen de fondo</span>
+                      <div className="flex items-center space-x-2">
+                        <input
+                          type="text"
+                          placeholder="Pega un enlace (URL) de imagen"
+                          className="flex-1 border border-slate-300 rounded px-2 py-1 text-sm bg-white text-black"
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              const url = (e.currentTarget as HTMLInputElement).value.trim();
+                              if (url) {
+                                setBackgroundImage(url);
+                                setShowBackgroundImageDialog(false);
+                              }
+                            }
+                          }}
+                        />
+                        <button
+                          className="px-2 py-1 text-sm rounded border border-slate-300 bg-white text-black"
+                          onClick={(e) => {
+                            const inputEl = (e.currentTarget.parentElement?.querySelector('input[type="text"]') as HTMLInputElement) || null;
+                            const url = inputEl?.value.trim();
+                            if (url) {
+                              setBackgroundImage(url);
+                              setShowBackgroundImageDialog(false);
+                            }
+                          }}
+                        >
+                          Aplicar
+                        </button>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <button
+                          className="px-2 py-1 text-sm rounded border border-slate-300 bg-white text-black"
+                          onClick={() => {
+                            const input = document.createElement('input');
+                            input.type = 'file';
+                            input.accept = 'image/*';
+                            input.onchange = (ev) => {
+                              const file = (ev.target as HTMLInputElement).files?.[0];
+                              if (file) {
+                                const reader = new FileReader();
+                                reader.onload = (re) => {
+                                  const result = re.target?.result;
+                                  if (typeof result === 'string') {
+                                    setBackgroundImage(result);
+                                    setShowBackgroundImageDialog(false);
+                                  }
+                                };
+                                reader.readAsDataURL(file);
+                              }
+                            };
+                            input.click();
+                          }}
+                        >
+                          Desde este equipo
+                        </button>
+                        <button
+                          className="px-2 py-1 text-sm rounded border border-slate-300 bg-white text-black"
+                          onClick={() => setShowBackgroundImageDialog(false)}
+                        >
+                          Cerrar
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               ) : (
                 <div className="relative w-full h-full">
