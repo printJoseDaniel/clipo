@@ -655,11 +655,12 @@ function App() {
                             )}
                             {/* Panel de formato general (esquinas redondeadas) */}
                             <div
-                              className="absolute bg-white border border-slate-200 rounded-md shadow-lg p-3 z-10 flex items-center space-x-2"
+                              className="absolute bg-white border border-slate-200 rounded-md shadow-lg p-3 z-10 flex items-center space-x-2 text-black"
                               style={{
                                 top: 'calc(100% + 10px)',
                                 left: '50%',
                                 transform: 'translateX(-50%)',
+                                color: '#000',
                               }}
                               onMouseDown={(e) => e.stopPropagation()}
                               onClick={(e) => e.stopPropagation()}
@@ -696,25 +697,26 @@ function App() {
                             </div>
                             {element.type === 'text' && (
                               <div
-                                className="absolute bg-white border border-slate-200 rounded-md shadow-lg p-3 z-10 flex items-center space-x-2"
+                                className="absolute bg-white border border-slate-200 rounded-md shadow-lg p-3 z-10 flex items-center space-x-2 text-black"
                                 style={{
                                   top: 'calc(100% + 56px)',
                                   left: '50%',
                                   transform: 'translateX(-50%)',
+                                  color: '#000',
                                 }}
                                 onMouseDown={(e) => e.stopPropagation()}
                                 onClick={(e) => e.stopPropagation()}
                               >
                                 <select
-                                  className="border border-slate-300 rounded px-2 py-1 text-sm"
+                                  className="border border-slate-300 rounded px-2 py-1 text-sm bg-white text-black"
                                   value={element.fontFamily || 'Inter, system-ui, sans-serif'}
                                   onChange={(e) => {
                                     const v = e.target.value;
                                     setCanvasElements((prev) =>
                                       prev.map((el) => (el.id === element.id ? { ...el, fontFamily: v } : el))
-                                    );
+                                      );
                                   }}
-                                >
+                                  >
                                   <option value="Inter, system-ui, sans-serif">Inter</option>
                                   <option value="Arial, Helvetica, sans-serif">Arial</option>
                                   <option value="Georgia, serif">Georgia</option>
@@ -725,7 +727,7 @@ function App() {
                                 <div className="flex items-center">
                                   <input
                                     type="number"
-                                    className="w-20 border border-slate-300 rounded px-2 py-1 text-sm"
+                                    className="w-20 border border-slate-300 rounded px-2 py-1 text-sm bg-white text-black"
                                     min={8}
                                     max={300}
                                     step={1}
@@ -735,49 +737,49 @@ function App() {
                                       if (!isNaN(size)) {
                                         setCanvasElements((prev) =>
                                           prev.map((el) => (el.id === element.id ? { ...el, fontSize: size } : el))
-                                        );
+                                          );
                                       }
                                     }}
-                                  />
+                                    />
                                 </div>
                                 {/* Text color */}
                                 <div className="flex items-center space-x-1">
                                   <label className="text-xs text-slate-600">Texto</label>
                                   <input
                                     type="color"
-                                    className="w-8 h-8 p-0 border border-slate-300 rounded"
+                                    className="w-8 h-8 p-0 border border-slate-300 rounded bg-white"
                                     value={element.color || '#333333'}
                                     onChange={(e) => {
                                       const v = e.target.value;
                                       setCanvasElements((prev) =>
                                         prev.map((el) => (el.id === element.id ? { ...el, color: v } : el))
-                                      );
+                                        );
                                     }}
-                                  />
+                                    />
                                 </div>
                                 {/* Background color */}
                                 <div className="flex items-center space-x-1">
                                   <label className="text-xs text-slate-600">Fondo</label>
                                   <input
                                     type="color"
-                                    className="w-8 h-8 p-0 border border-slate-300 rounded"
+                                    className="w-8 h-8 p-0 border border-slate-300 rounded bg-white"
                                     value={element.backgroundColor || '#ffffff'}
                                     onChange={(e) => {
                                       const v = e.target.value;
                                       setCanvasElements((prev) =>
                                         prev.map((el) =>
                                           el.id === element.id ? { ...el, backgroundColor: v } : el
-                                        )
-                                      );
+                                          )
+                                        );
                                     }}
-                                  />
+                                    />
                                 </div>
                                 {/* Border width */}
                                 <div className="flex items-center space-x-1">
                                   <label className="text-xs text-slate-600">Borde</label>
                                   <input
                                     type="number"
-                                    className="w-16 border border-slate-300 rounded px-2 py-1 text-sm"
+                                    className="w-16 border border-slate-300 rounded px-2 py-1 text-sm bg-white text-black"
                                     min={0}
                                     max={20}
                                     step={1}
@@ -786,30 +788,30 @@ function App() {
                                       const v = Math.max(0, Math.min(20, parseInt(e.target.value, 10) || 0));
                                       setCanvasElements((prev) =>
                                         prev.map((el) => (el.id === element.id ? { ...el, borderWidth: v } : el))
-                                      );
+                                        );
                                     }}
-                                  />
+                                    />
                                   <input
                                     type="color"
-                                    className="w-8 h-8 p-0 border border-slate-300 rounded"
+                                    className="w-8 h-8 p-0 border border-slate-300 rounded bg-white"
                                     value={element.borderColor || '#e2e8f0'}
                                     onChange={(e) => {
                                       const v = e.target.value;
                                       setCanvasElements((prev) =>
                                         prev.map((el) => (el.id === element.id ? { ...el, borderColor: v } : el))
-                                      );
+                                        );
                                     }}
-                                  />
+                                    />
                                   <select
-                                    className="border border-slate-300 rounded px-2 py-1 text-sm"
+                                    className="border border-slate-300 rounded px-2 py-1 text-sm bg-white text-black"
                                     value={element.borderStyle || 'solid'}
                                     onChange={(e) => {
                                       const v = e.target.value as 'solid' | 'dashed';
                                       setCanvasElements((prev) =>
                                         prev.map((el) => (el.id === element.id ? { ...el, borderStyle: v } : el))
-                                      );
+                                        );
                                     }}
-                                  >
+                                    >
                                     <option value="solid">Continua</option>
                                     <option value="dashed">Discontinua</option>
                                   </select>
