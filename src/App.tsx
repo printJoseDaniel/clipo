@@ -57,6 +57,21 @@ function App() {
     window.addEventListener('mouseup', handleWindowMouseUp);
     return () => window.removeEventListener('mouseup', handleWindowMouseUp);
   }, []);
+
+  // Borrar elemento seleccionado con la tecla Supr (Delete)
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Delete' && selectedElementId !== null) {
+        e.preventDefault();
+        setCanvasElements((prev) => prev.filter((el) => el.id !== selectedElementId));
+        setSelectedElementId(null);
+        setShowEffectDropdown(false);
+      }
+    };
+
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [selectedElementId]);
   
   const handleAddText = () => {
     const newText: CanvasElement = {
