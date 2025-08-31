@@ -27,6 +27,7 @@ function App() {
   const [selectedElementId, setSelectedElementId] = useState<number | null>(null);
   const [showEffectDropdown, setShowEffectDropdown] = useState<boolean>(false);
   const [editingTextId, setEditingTextId] = useState<number | null>(null);
+  const [showCornersOptions, setShowCornersOptions] = useState<boolean>(false);
   
   // Estado para gestionar acciones de movimiento y redimensionamiento
   const [action, setAction] = useState<{
@@ -413,6 +414,7 @@ function App() {
                         e.stopPropagation();
                         setSelectedElementId(element.id);
                         setShowEffectDropdown(false);
+                        setShowCornersOptions(false);
                       }}
                       onDoubleClick={(e) => {
                         if (element.type === 'text') {
@@ -653,53 +655,11 @@ function App() {
                                 </button>
                               </div>
                             )}
-                            {/* Panel de formato general (esquinas redondeadas) */}
-                            <div
-                              className="absolute bg-white border border-slate-200 rounded-md shadow-lg p-3 z-10 flex items-center space-x-2 text-black"
-                              style={{
-                                top: 'calc(100% + 10px)',
-                                left: '50%',
-                                transform: 'translateX(-50%)',
-                                color: '#000',
-                              }}
-                              onMouseDown={(e) => e.stopPropagation()}
-                              onClick={(e) => e.stopPropagation()}
-                            >
-                              <label className="text-xs text-slate-600">Esquinas</label>
-                              <input
-                                type="range"
-                                min={0}
-                                max={100}
-                                step={1}
-                                value={Number(element.borderRadius ?? 0)}
-                                onChange={(e) => {
-                                  const v = Math.max(0, Math.min(100, parseInt(e.target.value, 10) || 0));
-                                  setCanvasElements((prev) =>
-                                    prev.map((el) => (el.id === element.id ? { ...el, borderRadius: v } : el))
-                                  );
-                                }}
-                              />
-                              <input
-                                type="number"
-                                className="w-16 border border-slate-300 rounded px-2 py-1 text-sm"
-                                min={0}
-                                max={100}
-                                step={1}
-                                value={Number(element.borderRadius ?? 0)}
-                                onChange={(e) => {
-                                  const v = Math.max(0, Math.min(100, parseInt(e.target.value, 10) || 0));
-                                  setCanvasElements((prev) =>
-                                    prev.map((el) => (el.id === element.id ? { ...el, borderRadius: v } : el))
-                                  );
-                                }}
-                              />
-                              <span className="text-xs text-slate-500">%</span>
-                            </div>
                             {element.type === 'text' && (
                               <div
                                 className="absolute bg-white border border-slate-200 rounded-md shadow-lg p-3 z-10 flex items-center space-x-2 text-black"
                                 style={{
-                                  top: 'calc(100% + 56px)',
+                                  top: 'calc(100% + 10px)',
                                   left: '50%',
                                   transform: 'translateX(-50%)',
                                   color: '#000',
@@ -815,6 +775,48 @@ function App() {
                                     <option value="solid">Continua</option>
                                     <option value="dashed">Discontinua</option>
                                   </select>
+                                </div>
+                                {/* Corners (inside text panel, collapsible) */}
+                                <div className="flex flex-col">
+                                  <button
+                                    className="px-2 py-1 text-sm rounded border border-slate-300 bg-white text-black"
+                                    onClick={() => setShowCornersOptions((v) => !v)}
+                                  >
+                                    Esquinas {showCornersOptions ? '▴' : '▾'}
+                                  </button>
+                                  {showCornersOptions && (
+                                    <div className="mt-2 flex items-center space-x-2">
+                                      <label className="text-xs text-slate-600">0–100%</label>
+                                      <input
+                                        type="range"
+                                        min={0}
+                                        max={100}
+                                        step={1}
+                                        value={Number(element.borderRadius ?? 0)}
+                                        onChange={(e) => {
+                                          const v = Math.max(0, Math.min(100, parseInt(e.target.value, 10) || 0));
+                                          setCanvasElements((prev) =>
+                                            prev.map((el) => (el.id === element.id ? { ...el, borderRadius: v } : el))
+                                          );
+                                        }}
+                                      />
+                                      <input
+                                        type="number"
+                                        className="w-16 border border-slate-300 rounded px-2 py-1 text-sm bg-white text-black"
+                                        min={0}
+                                        max={100}
+                                        step={1}
+                                        value={Number(element.borderRadius ?? 0)}
+                                        onChange={(e) => {
+                                          const v = Math.max(0, Math.min(100, parseInt(e.target.value, 10) || 0));
+                                          setCanvasElements((prev) =>
+                                            prev.map((el) => (el.id === element.id ? { ...el, borderRadius: v } : el))
+                                          );
+                                        }}
+                                      />
+                                      <span className="text-xs text-slate-500">%</span>
+                                    </div>
+                                  )}
                                 </div>
                                 <button
                                   className={`px-2 py-1 text-sm rounded border ${
