@@ -65,7 +65,7 @@ function App() {
   // Borrar elemento seleccionado con la tecla Supr (Delete)
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Delete' && selectedElementId !== null) {
+      if (e.key === 'Delete' && selectedElementId !== null && editingTextId === null) {
         e.preventDefault();
         setCanvasElements((prev) => prev.filter((el) => el.id !== selectedElementId));
         setSelectedElementId(null);
@@ -75,7 +75,7 @@ function App() {
 
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [selectedElementId]);
+  }, [selectedElementId, editingTextId]);
   
   const handleAddText = () => {
     const newText: CanvasElement = {
@@ -359,9 +359,10 @@ function App() {
                       className="absolute cursor-move hover:shadow-lg transition-shadow duration-200 relative"
                       onMouseDown={(e) => {
                         e.stopPropagation();
-                        e.preventDefault();
-                        // Evitar iniciar movimiento si está en edición de texto o doble clic
+                        // Si estamos editando texto (o doble clic), no impedir el foco ni iniciar movimiento
                         if (editingTextId === element.id || e.detail >= 2) return;
+                        // Prevenir selección de texto/imagen cuando sí vamos a mover
+                        e.preventDefault();
                         setAction({
                           type: 'moving',
                           elementId: element.id,
@@ -408,6 +409,7 @@ function App() {
                             <div
                               contentEditable
                               suppressContentEditableWarning
+                              autoFocus
                               className="outline-none w-full text-center"
                               style={{
                                 fontFamily: element.fontFamily,
@@ -626,24 +628,44 @@ function App() {
                                   <option value="Verdana, Geneva, sans-serif">Verdana</option>
                                   <option value="Roboto, system-ui, sans-serif">Roboto</option>
                                 </select>
-                                <select
-                                  className="border border-slate-300 rounded px-2 py-1 text-sm"
-                                  value={String(element.fontSize || 16)}
-                                  onChange={(e) => {
-                                    const size = parseInt(e.target.value, 10);
-                                    setCanvasElements((prev) =>
-                                      prev.map((el) => (el.id === element.id ? { ...el, fontSize: size } : el))
-                                    );
-                                  }}
-                                >
-                                  <option value="12">12</option>
-                                  <option value="14">14</option>
-                                  <option value="16">16</option>
-                                  <option value="18">18</option>
-                                  <option value="24">24</option>
-                                  <option value="32">32</option>
-                                  <option value="48">48</option>
-                                </select>
+                                <div className="flex items-center space-x-1">
+                                  <select
+                                    className="border border-slate-300 rounded px-2 py-1 text-sm"
+                                    value={String(element.fontSize || 16)}
+                                    onChange={(e) => {
+                                      const size = parseInt(e.target.value, 10);
+                                      if (!isNaN(size)) {
+                                        setCanvasElements((prev) =>
+                                          prev.map((el) => (el.id === element.id ? { ...el, fontSize: size } : el))
+                                        );
+                                      }
+                                    }}
+                                  >
+                                    <option value="12">12</option>
+                                    <option value="14">14</option>
+                                    <option value="16">16</option>
+                                    <option value="18">18</option>
+                                    <option value="24">24</option>
+                                    <option value="32">32</option>
+                                    <option value="48">48</option>
+                                  </select>
+                                  <input
+                                    type="number"
+                                    className="w-20 border border-slate-300 rounded px-2 py-1 text-sm"
+                                    min={8}
+                                    max={300}
+                                    step={1}
+                                    value={Number(element.fontSize || 16)}
+                                    onChange={(e) => {
+                                      const size = parseInt(e.target.value, 10);
+                                      if (!isNaN(size)) {
+                                        setCanvasElements((prev) =>
+                                          prev.map((el) => (el.id === element.id ? { ...el, fontSize: size } : el))
+                                        );
+                                      }
+                                    }}
+                                  />
+                                </div>
                                 <button
                                   className={`px-2 py-1 text-sm rounded border ${
                                     element.fontWeight === 'bold' ? 'bg-slate-200 border-slate-300' : 'border-slate-300'
