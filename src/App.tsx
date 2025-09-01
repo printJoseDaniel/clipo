@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
-import { Type, Image as ImageIcon, MousePointer, Square, Circle, Minus } from 'lucide-react';
+import { Type, Image as ImageIcon, MousePointer, Square, Lock, Unlock, Shapes } from 'lucide-react';
 
 function App() {
   type CanvasElement = {
     id: number;
-    type: 'text' | 'image';
+    type: 'text' | 'image' | 'shape';
+    name?: string;
     content?: string;
     src?: string;
     x: number;
@@ -19,6 +20,8 @@ function App() {
     borderColor?: string;
     borderStyle?: 'solid' | 'dashed';
     backgroundColor?: string; // for text box background
+    locked?: boolean;
+    shapeKind?: 'rectangle' | 'square' | 'circle' | 'triangle' | 'diamond' | 'star' | 'arrow' | 'line' | 'pentagon' | 'hexagon';
     // Imagen: filtros y transparencia
     opacity?: number; // 0-100
     brightness?: number; // 0-200
@@ -44,7 +47,45 @@ function App() {
   const [showImageSizeOptions, setShowImageSizeOptions] = useState<boolean>(false);
   const [imageKeepAspect, setImageKeepAspect] = useState<boolean>(true);
   const [showBackgroundPanel, setShowBackgroundPanel] = useState<boolean>(false);
+  const [showLayersPanel, setShowLayersPanel] = useState<boolean>(false);
   const [showElementPanel, setShowElementPanel] = useState<boolean>(false);
+  const [backgroundLocked, setBackgroundLocked] = useState<boolean>(false);
+  const [dragLayerId, setDragLayerId] = useState<number | null>(null);
+  const [currentTool, setCurrentTool] = useState<'select'>('select');
+  const [selectedElementIds, setSelectedElementIds] = useState<number[]>([]);
+  const [marquee, setMarquee] = useState<{ active: boolean; startX: number; startY: number; currentX: number; currentY: number }>({ active: false, startX: 0, startY: 0, currentX: 0, currentY: 0 });
+  const [showIntro, setShowIntro] = useState<boolean>(true);
+  const [showShapeKindOptions, setShowShapeKindOptions] = useState<boolean>(false);
+  const handleAddShape = () => {
+    const nextShapeIndex = canvasElements.filter((el) => el.type === 'shape').length + 1;
+    const defaultWidth = 200;
+    const defaultHeight = 120;
+    const cw = canvasAreaRef.current?.clientWidth ?? 0;
+    const ch = canvasAreaRef.current?.clientHeight ?? 0;
+    const centerX = Math.max(0, Math.round((cw - defaultWidth) / 2));
+    const centerY = Math.max(0, Math.round((ch - defaultHeight) / 2));
+
+    const newShape: CanvasElement = {
+      id: Date.now(),
+      type: 'shape',
+      name: `forma${nextShapeIndex}`,
+      x: centerX,
+      y: centerY,
+      width: defaultWidth,
+      height: defaultHeight,
+      borderRadius: 0,
+      borderWidth: 1,
+      borderColor: '#94a3b8',
+      borderStyle: 'solid',
+      backgroundColor: '#60a5fa',
+      shapeKind: 'rectangle',
+      locked: false,
+    };
+    setCanvasElements((prev) => [...prev, newShape]);
+    setSelectedElementId(newShape.id);
+    setShowElementPanel(true);
+    setShowBackgroundPanel(false);
+  };
   // Fondo sólido: color + transparencia
   const [backgroundColor, setBackgroundColor] = useState<string>("#ffffff");
   const [backgroundOpacity, setBackgroundOpacity] = useState<number>(100);
@@ -122,7 +163,33 @@ function App() {
   // Borrar elemento seleccionado con la tecla Supr (Delete)
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
+      // Selección con tecla V
+      if (e.key.toLowerCase() === 'v') {
+        e.preventDefault();
+        setCurrentTool('select');
+        // Recoger paneles/desplegables
+        setShowEffectDropdown(false);
+        setShowCornersOptions(false);
+        setShowImageCornersOptions(false);
+        setShowImageBorderOptions(false);
+        setShowImageFiltersOptions(false);
+        setShowImageOpacityOptions(false);
+        setShowElementPanel(false);
+        setShowBackgroundPanel(false);
+        setEditingTextId(null);
+        return;
+      }
+      // Toggle panel de capas con Alt+1
+      if (e.altKey && e.key === '1') {
+        e.preventDefault();
+        setShowLayersPanel((v) => !v);
+        setShowBackgroundPanel(false);
+        setShowElementPanel(false);
+        return;
+      }
       if (e.key === 'Delete' && selectedElementId !== null && editingTextId === null) {
+        const el = canvasElements.find((x) => x.id === selectedElementId);
+        if (el?.locked) return;
         e.preventDefault();
         setCanvasElements((prev) => prev.filter((el) => el.id !== selectedElementId));
         setSelectedElementId(null);
@@ -132,11 +199,32 @@ function App() {
 
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [selectedElementId, editingTextId]);
+  }, [selectedElementId, editingTextId, canvasElements]);
+
+  // Recalcular posición de paneles (imagen/texto/fondo) centrados respecto al lienzo, sobre su borde superior
+  useEffect(() => {
+    const updatePos = () => {
+      if (!showElementPanel && !showBackgroundPanel) return;
+      const rect = canvasRef.current?.getBoundingClientRect();
+      if (rect) {
+        setImagePanelPos({ top: Math.round(rect.top), left: Math.round(rect.left + rect.width / 2) });
+      }
+    };
+    updatePos();
+    window.addEventListener('resize', updatePos);
+    window.addEventListener('scroll', updatePos, true);
+    return () => {
+      window.removeEventListener('resize', updatePos);
+      window.removeEventListener('scroll', updatePos, true);
+    };
+  }, [showElementPanel, showBackgroundPanel, selectedElementId, canvasElements]);
   
   const canvasAreaRef = useRef<HTMLDivElement | null>(null);
+  const canvasRef = useRef<HTMLDivElement | null>(null);
+  const [imagePanelPos, setImagePanelPos] = useState<{ top: number; left: number }>({ top: 0, left: 0 });
 
   const handleAddText = () => {
+    const nextTextIndex = canvasElements.filter((el) => el.type === 'text').length + 1;
     const defaultWidth = 200;
     const defaultHeight = 60;
     const cw = canvasAreaRef.current?.clientWidth ?? 0;
@@ -147,6 +235,7 @@ function App() {
     const newText: CanvasElement = {
       id: Date.now(),
       type: 'text',
+      name: `texto${nextTextIndex}`,
       content: 'Haz doble clic para editar',
       x: centerX,
       y: centerY,
@@ -160,10 +249,14 @@ function App() {
       borderColor: '#e2e8f0',
       borderStyle: 'solid',
       backgroundColor: 'transparent',
+      locked: false,
       width: defaultWidth,
       height: defaultHeight,
     };
     setCanvasElements((prev) => [...prev, newText]);
+    setSelectedElementId(newText.id);
+    setShowElementPanel(true);
+    setShowBackgroundPanel(false);
   };
 
   const handleImageUpload = () => {
@@ -179,6 +272,7 @@ function App() {
           if (typeof result === 'string') {
             const img = new window.Image();
             img.onload = () => {
+              const nextImageIndex = canvasElements.filter((el) => el.type === 'image').length + 1;
               const maxW = 400;
               const maxH = 300;
               let w = img.naturalWidth || 200;
@@ -195,6 +289,7 @@ function App() {
               const newImage: CanvasElement = {
                 id: Date.now(),
                 type: 'image',
+                name: `imagen${nextImageIndex}`,
                 src: result,
                 x: centerX,
                 y: centerY,
@@ -203,6 +298,7 @@ function App() {
                 borderColor: '#e2e8f0',
                 borderStyle: 'solid',
                 backgroundColor: 'transparent',
+                locked: false,
                 opacity: 100,
                 brightness: 100,
                 contrast: 100,
@@ -215,6 +311,9 @@ function App() {
                 height: h,
               };
               setCanvasElements((prev) => [...prev, newImage]);
+              setSelectedElementId(newImage.id);
+              setShowElementPanel(true);
+              setShowBackgroundPanel(false);
             };
             img.src = result;
           }
@@ -264,18 +363,33 @@ function App() {
           <div className="border-t border-slate-200 pt-6">
             <h3 className="text-sm font-semibold text-slate-700 mb-4 uppercase tracking-wide">Herramientas</h3>
             <div className="grid grid-cols-2 gap-2">
-              <button className="p-3 bg-white hover:bg-slate-50 border border-slate-200 rounded-lg transition-colors duration-200 flex items-center justify-center">
+              <button
+                className={`p-3 border rounded-lg transition-colors duration-200 flex items-center justify-center ${currentTool === 'select' ? 'bg-blue-50 border-blue-300' : 'bg-white hover:bg-slate-50 border-slate-200'}`}
+                title="Selector (V)"
+                onClick={() => {
+                  setCurrentTool('select');
+                  setShowEffectDropdown(false);
+                  setShowCornersOptions(false);
+                  setShowImageCornersOptions(false);
+                  setShowImageBorderOptions(false);
+                  setShowImageFiltersOptions(false);
+                  setShowImageOpacityOptions(false);
+                  setShowElementPanel(false);
+                  setShowBackgroundPanel(false);
+                  setEditingTextId(null);
+                }}
+              >
                 <MousePointer className="w-4 h-4 text-slate-600" />
               </button>
-              <button className="p-3 bg-white hover:bg-slate-50 border border-slate-200 rounded-lg transition-colors duration-200 flex items-center justify-center">
-                <Square className="w-4 h-4 text-slate-600" />
+              <button
+                className="p-3 bg-white hover:bg-slate-50 border border-slate-200 rounded-lg transition-colors duration-200 flex items-center justify-center"
+                title="Formas"
+                onClick={handleAddShape}
+              >
+                <Shapes className="w-4 h-4 text-slate-600" />
               </button>
-              <button className="p-3 bg-white hover:bg-slate-50 border border-slate-200 rounded-lg transition-colors duration-200 flex items-center justify-center">
-                <Circle className="w-4 h-4 text-slate-600" />
-              </button>
-              <button className="p-3 bg-white hover:bg-slate-50 border border-slate-200 rounded-lg transition-colors duration-200 flex items-center justify-center">
-                <Minus className="w-4 h-4 text-slate-600" />
-              </button>
+              
+              
             </div>
           </div>
 
@@ -293,8 +407,164 @@ function App() {
 
       {/* Main Canvas Area */}
       <div className="flex-1 h-full bg-white relative overflow-hidden">
+        {showLayersPanel && (
+          <div className="absolute top-16 left-0 w-[22rem] min-w-[300px] h-[calc(100%-4rem)] border-r border-slate-200 bg-slate-50/90 backdrop-blur-sm p-4 overflow-y-auto z-20">
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="text-sm font-semibold text-slate-700">Capas</h2>
+              <button
+                className="text-xs px-2 py-1 rounded border border-slate-300 text-slate-700 hover:bg-white"
+                onClick={() => setShowLayersPanel(false)}
+              >
+                Cerrar
+              </button>
+            </div>
+            <div className="mb-4 p-2 rounded border border-slate-200 bg-white">
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-slate-600">Fondo</span>
+                <label className="text-xs text-slate-700 flex items-center space-x-1">
+                  <input type="checkbox" checked={backgroundLocked} onChange={(e) => setBackgroundLocked(e.target.checked)} />
+                  <span>Bloquear</span>
+                </label>
+              </div>
+            </div>
+            <div className="space-y-2">
+              {[...canvasElements].map((el) => el).reverse().map((el) => (
+                <div key={el.id} className={`p-2 pr-3 rounded border ${selectedElementId === el.id ? 'border-blue-400 bg-blue-50' : 'border-slate-200 bg-white'} flex items-center justify-between`}
+                  onDragOver={(e) => {
+                    if (dragLayerId == null) return;
+                    e.preventDefault();
+                    const from = canvasElements.findIndex((x) => x.id === dragLayerId);
+                    const to = canvasElements.findIndex((x) => x.id === el.id);
+                    if (from === -1 || to === -1 || from === to) return;
+                    setCanvasElements((prev) => {
+                      const list = [...prev];
+                      const curFrom = list.findIndex((x) => x.id === dragLayerId);
+                      const curTo = list.findIndex((x) => x.id === el.id);
+                      if (curFrom === -1 || curTo === -1 || curFrom === curTo) return prev;
+                      const [item] = list.splice(curFrom, 1);
+                      list.splice(curTo, 0, item);
+                      return list;
+                    });
+                  }}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    setDragLayerId(null);
+                  }}
+                >
+                  <button
+                    className="flex items-center flex-1 mr-3 text-left"
+                    title={`${el.type} #${el.id}`}
+                    onClick={() => {
+                      setSelectedElementId(el.id);
+                      setShowElementPanel(true);
+                      setShowBackgroundPanel(false);
+                    }}
+                  >
+                    <div className="w-16 h-12 mr-2 border border-slate-200 rounded overflow-hidden bg-white flex items-center justify-center">
+                      {el.type === 'image' ? (
+                        <img
+                          src={el.src}
+                          alt={"thumb-" + el.id}
+                          className="max-w-full max-h-full block"
+                          style={{
+                            filter: `brightness(${el.brightness ?? 100}%) contrast(${el.contrast ?? 100}%) saturate(${el.saturate ?? 100}%) hue-rotate(${el.hueRotate ?? 0}deg) grayscale(${el.grayscale ?? 0}%) sepia(${el.sepia ?? 0}%) blur(${el.blur ?? 0}px)`,
+                            opacity: Math.max(0, Math.min(100, el.opacity ?? 100)) / 100,
+                          }}
+                        />
+                      ) : el.type === 'shape' ? (
+                        <svg viewBox="0 0 100 100" className="w-full h-full">
+                          {el.shapeKind === 'circle' ? (
+                            <circle cx="50" cy="50" r="40" fill={el.backgroundColor || '#60a5fa'} stroke={el.borderColor || 'transparent'} strokeWidth={el.borderWidth || 0} strokeDasharray={el.borderStyle === 'dashed' ? '6 4' : undefined} />
+                          ) : el.shapeKind === 'triangle' ? (
+                            <polygon points="50,15 85,85 15,85" fill={el.backgroundColor || '#60a5fa'} stroke={el.borderColor || 'transparent'} strokeWidth={el.borderWidth || 0} strokeDasharray={el.borderStyle === 'dashed' ? '6 4' : undefined} />
+                          ) : el.shapeKind === 'arrow' ? (
+                            <path d="M20 40 H60 V30 L85 50 L60 70 V60 H20 Z" fill={el.backgroundColor || '#60a5fa'} stroke={el.borderColor || 'transparent'} strokeWidth={el.borderWidth || 0} strokeDasharray={el.borderStyle === 'dashed' ? '6 4' : undefined} />
+                          ) : (
+                            <rect x="20" y="20" width="60" height="60" rx={el.shapeKind === 'rectangle' ? (el.borderRadius ?? 0) : 0} fill={el.backgroundColor || '#60a5fa'} stroke={el.borderColor || 'transparent'} strokeWidth={el.borderWidth || 0} strokeDasharray={el.borderStyle === 'dashed' ? '6 4' : undefined} />
+                          )}
+                        </svg>
+                      ) : (
+                        <div
+                          className="px-1 py-0.5 rounded border text-[10px] leading-tight truncate max-w-[56px]"
+                          style={{
+                            fontFamily: el.fontFamily,
+                            fontWeight: el.fontWeight,
+                            fontStyle: el.fontStyle,
+                            color: el.color || '#333',
+                            backgroundColor: el.backgroundColor || 'transparent',
+                          }}
+                        >
+                          {(el.content || 'Texto').slice(0, 10)}
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex flex-col min-w-0">
+                      <span className="text-xs text-slate-700 truncate">{
+                        el.name ?? (
+                          (el.type === 'text' ? 'Texto' : el.type === 'image' ? 'Imagen' : 'Forma') + ' #' + el.id
+                        )
+                      }</span>
+                      <span className="text-[10px] text-slate-500">{Math.round(el.width)}×{Math.round(el.height)} px</span>
+                    </div>
+                  </button>
+                  <div className="flex items-center space-x-1">
+                    <button
+                      className="text-xs px-2 py-1 rounded border border-slate-300"
+                      title="Subir una posición"
+                      onClick={() => {
+                        setCanvasElements((prev) => {
+                          const list = [...prev];
+                          const from = list.findIndex((x) => x.id === el.id);
+                          const to = Math.min(list.length - 1, from + 1);
+                          if (from === -1 || from === to) return prev;
+                          const [item] = list.splice(from, 1);
+                          list.splice(to, 0, item);
+                          return list;
+                        });
+                      }}
+                    >▲</button>
+                    <button
+                      className="text-xs px-2 py-1 rounded border border-slate-300"
+                      title="Bajar una posición"
+                      onClick={() => {
+                        setCanvasElements((prev) => {
+                          const list = [...prev];
+                          const from = list.findIndex((x) => x.id === el.id);
+                          const to = Math.max(0, from - 1);
+                          if (from === -1 || from === to) return prev;
+                          const [item] = list.splice(from, 1);
+                          list.splice(to, 0, item);
+                          return list;
+                        });
+                      }}
+                    >▼</button>
+                    <button
+                      className={`text-xs px-2 py-1 rounded border border-slate-300 cursor-grab active:cursor-grabbing ${dragLayerId === el.id ? 'bg-slate-200' : ''}`}
+                      title="Arrastrar para reordenar"
+                      draggable
+                      onDragStart={(e) => {
+                        setDragLayerId(el.id);
+                        e.dataTransfer.effectAllowed = 'move';
+                      }}
+                      onDragEnd={() => setDragLayerId(null)}
+                    >≡</button>
+                    <button
+                      className="text-xs px-2 py-1 rounded border border-slate-300"
+                      title={el.locked ? 'Desbloquear capa' : 'Bloquear capa'}
+                      onClick={() => {
+                        setCanvasElements((prev) => prev.map((x) => (x.id === el.id ? { ...x, locked: !x.locked } : x)));
+                      }}
+                    >
+                      {el.locked ? <Lock className="w-3 h-3" /> : <Unlock className="w-3 h-3" />}
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
         {/* Top Toolbar */}
-        <div className="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-6 shadow-sm">
+        <div className="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-6 shadow-sm w-full">
           <div className="flex items-center space-x-4">
             <h1 className="text-lg font-semibold text-slate-800">Presentación sin título</h1>
             <div className="flex items-center space-x-2 text-sm text-slate-500">
@@ -316,6 +586,29 @@ function App() {
         {/* Canvas Container */}
         <div className="h-[calc(100vh-4rem)] flex items-center justify-center p-8 bg-gradient-to-br from-slate-50 to-slate-100"
         onMouseMove={(e) => {
+          // Actualizar rectángulo de selección (marquee)
+          if (marquee.active) {
+            setMarquee((m) => ({ ...m, currentX: e.clientX, currentY: e.clientY }));
+            const contentRect = canvasAreaRef.current?.getBoundingClientRect();
+            if (contentRect) {
+              const x1 = Math.min(marquee.startX, e.clientX);
+              const y1 = Math.min(marquee.startY, e.clientY);
+              const x2 = Math.max(marquee.startX, e.clientX);
+              const y2 = Math.max(marquee.startY, e.clientY);
+              const ids: number[] = [];
+              for (const el of canvasElements) {
+                const elLeft = contentRect.left + el.x;
+                const elTop = contentRect.top + el.y;
+                const elRight = elLeft + el.width;
+                const elBottom = elTop + el.height;
+                if (elRight > x1 && elLeft < x2 && elBottom > y1 && elTop < y2) {
+                  ids.push(el.id);
+                }
+              }
+              setSelectedElementIds(ids);
+            }
+            return;
+          }
           // Solo mover/redimensionar mientras el botón izquierdo está presionado
           if ((e.buttons & 1) !== 1) return;
 
@@ -407,6 +700,14 @@ function App() {
           }
         }}
         onMouseUp={() => {
+          if (marquee.active) {
+            setMarquee({ active: false, startX: 0, startY: 0, currentX: 0, currentY: 0 });
+            if (selectedElementIds.length === 1) {
+              setSelectedElementId(selectedElementIds[0]);
+            } else {
+              setSelectedElementId(null);
+            }
+          }
           setAction({
             type: null,
             elementId: null,
@@ -417,6 +718,9 @@ function App() {
           });
         }}
         onMouseLeave={() => {
+          if (marquee.active) {
+            setMarquee({ active: false, startX: 0, startY: 0, currentX: 0, currentY: 0 });
+          }
           setAction({
             type: null,
             elementId: null,
@@ -429,8 +733,9 @@ function App() {
         
           {/* Interactive Canvas Zone */}
           <div
-            className="relative w-[60%] h-[70%] bg-white rounded-2xl shadow-2xl border-2 border-dashed border-slate-300 hover:border-blue-400 transition-all duration-300 cursor-pointer group overflow-hidden"
+            className="relative w-[60%] h-[70%] bg-white shadow-2xl border-2 border-dashed border-slate-300 hover:border-blue-400 transition-all duration-300 cursor-pointer group overflow-hidden"
             style={{ backgroundColor: hexToRgba(backgroundColor, backgroundOpacity) }}
+            ref={canvasRef}
           >
             {/* Background image layer removed (solo color sólido) */}
             {/* Canvas Background Pattern */}
@@ -454,18 +759,26 @@ function App() {
                 setShowImageFiltersOptions(false);
                 setShowImageOpacityOptions(false);
                 setShowElementPanel(false);
-                setShowBackgroundPanel(true);
+                if (!backgroundLocked) setShowBackgroundPanel(true);
               }}
             >
               {canvasElements.length === 0 ? (
                 <div className="flex flex-col items-center justify-center h-full text-center">
-                  <h3 className="text-xl font-semibold text-slate-700 mb-2">
-                    Haz clic para cambiar el color de fondo
-                  </h3>
-                  
-                  <p className="text-sm text-slate-400">
-                    Usa las herramientas de la izquierda para añadir contenido
-                  </p>
+                  {showIntro && (
+                    <>
+                      <h3 className="text-xl font-semibold text-slate-700 mb-2">Haz clic para cambiar el color de fondo</h3>
+                      <p className="text-sm text-slate-400 mb-4">Usa las herramientas de la izquierda para añadir contenido</p>
+                      <button
+                        className="mt-2 px-5 py-2 rounded-md bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium shadow-sm"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setShowIntro(false);
+                        }}
+                      >
+                        Aceptar
+                      </button>
+                    </>
+                  )}
 
                   {showBackgroundImageDialog && (
                     <div
@@ -541,7 +854,7 @@ function App() {
                 </div>
               ) : (
                 <div className="relative w-full h-full">
-                  {canvasElements.map((element) => (
+                  {canvasElements.map((element, idx) => (
                     <div
                       key={element.id}
                       className="absolute cursor-move hover:shadow-lg transition-shadow duration-200 relative"
@@ -549,13 +862,35 @@ function App() {
                         e.stopPropagation();
                         // Si estamos editando texto (o doble clic), no iniciar movimiento
                         if (editingTextId === element.id || e.detail >= 2) return;
+                        // Solo permitir mover en modo selector
+                        if (currentTool !== 'select') return;
+                        if (element.locked) return;
                         // Prevenir selección de texto/imagen
                         e.preventDefault();
 
-                        // Alt + arrastrar => duplicar y mover la copia
+                        // Alt + arrastrar => duplicar y mover la copia (si no está bloqueado)
                         if (e.altKey) {
+                          if (element.locked) return;
                           const cloneId = Date.now();
-                          const clone: CanvasElement = { ...element, id: cloneId };
+                          const nextIndex =
+                            element.type === 'image'
+                              ? canvasElements.filter((x) => x.type === 'image').length + 1
+                              : element.type === 'text'
+                              ? canvasElements.filter((x) => x.type === 'text').length + 1
+                              : canvasElements.filter((x) => x.type === 'shape').length + 1;
+                          const gap = 8;
+                          const offsetY = Math.max(0, element.y - (element.height || 0) - gap);
+                          const clone: CanvasElement = {
+                            ...element,
+                            id: cloneId,
+                            y: offsetY,
+                            name:
+                              element.type === 'image'
+                                ? `imagen${nextIndex}`
+                                : element.type === 'text'
+                                ? `texto${nextIndex}`
+                                : `forma${nextIndex}`,
+                          };
                           setCanvasElements((prev) => [...prev, clone]);
                           setSelectedElementId(cloneId);
                           setAction({
@@ -581,6 +916,7 @@ function App() {
                       }}
                       onClick={(e) => {
                         e.stopPropagation();
+                        if (currentTool !== 'select') return;
                         setSelectedElementId(element.id);
                         setShowEffectDropdown(false);
                         setShowCornersOptions(false);
@@ -594,6 +930,7 @@ function App() {
                       onDoubleClick={(e) => {
                         if (element.type === 'text') {
                           e.stopPropagation();
+                          if (element.locked) return;
                           setSelectedElementId(element.id);
                           setEditingTextId(element.id);
                           setShowElementPanel(true);
@@ -606,11 +943,12 @@ function App() {
                         color: element.color,
                         width: element.width,
                         height: element.height,
+                        zIndex: 20 + idx,
                       }}
                     >
                       {element.type === 'text' ? (
                         <div
-                          className="w-full h-full px-3 py-2 rounded-lg border backdrop-blur-sm flex items-center justify-center overflow-hidden"
+                          className="w-full h-full px-3 py-2 rounded-lg border flex items-center justify-center overflow-hidden"
                           style={{
                             fontFamily: element.fontFamily,
                             fontWeight: element.fontWeight,
@@ -693,9 +1031,56 @@ function App() {
                             draggable={false}
                           />
                         </div>
+                      ) : element.type === 'shape' ? (
+                        <div className="w-full h-full" style={{ position: 'relative' }}>
+                          {element.shapeKind === 'rectangle' || element.shapeKind === 'square' ? (
+                            <div
+                              className="w-full h-full"
+                              style={{
+                                backgroundColor: element.backgroundColor || '#60a5fa',
+                                borderRadius: element.shapeKind === 'rectangle' ? `${element.borderRadius ?? 0}%` : '0%'
+                              }}
+                            />
+                          ) : element.shapeKind === 'circle' ? (
+                            <div
+                              className="w-full h-full"
+                              style={{ backgroundColor: element.backgroundColor || '#60a5fa', borderRadius: '50%' }}
+                            />
+                          ) : (
+                            <svg viewBox="0 0 100 100" className="w-full h-full">
+                              {element.shapeKind === 'triangle' ? (
+                                <polygon
+                                  points="50,10 90,90 10,90"
+                                  fill={element.backgroundColor || '#60a5fa'}
+                                  stroke={element.borderColor || 'transparent'}
+                                  strokeWidth={element.borderWidth || 0}
+                                  strokeDasharray={element.borderStyle === 'dashed' ? '6 4' : undefined}
+                                />
+                              ) : (
+                                <path
+                                  d="M20 40 H60 V30 L85 50 L60 70 V60 H20 Z"
+                                  fill={element.backgroundColor || '#60a5fa'}
+                                  stroke={element.borderColor || 'transparent'}
+                                  strokeWidth={element.borderWidth || 0}
+                                  strokeDasharray={element.borderStyle === 'dashed' ? '6 4' : undefined}
+                                />
+                              )}
+                            </svg>
+                          )}
+                          {/* Contorno sobre la forma, no alrededor del bounding box */}
+                          {element.shapeKind === 'rectangle' || element.shapeKind === 'square' || element.shapeKind === 'circle' ? (
+                            <div
+                              className="pointer-events-none absolute inset-0"
+                              style={{
+                                border: `${element.borderWidth ?? 0}px ${element.borderStyle ?? 'solid'} ${element.borderColor ?? 'transparent'}`,
+                                borderRadius: element.shapeKind === 'circle' ? '50%' : element.shapeKind === 'rectangle' ? `${element.borderRadius ?? 0}%` : '0%'
+                              }}
+                            />
+                          ) : null}
+                        </div>
                       ) : null}
 
-                      {selectedElementId === element.id && (
+                      {(selectedElementId === element.id || selectedElementIds.includes(element.id)) && (
                         <>
                           {/* Esquinas de redimensionado */}
                           <div
@@ -846,30 +1231,206 @@ function App() {
                                 </button>
                               </div>
                             )}
-                            {showElementPanel && element.type === 'image' && (
+                            {showElementPanel && element.type === 'shape' && (
                               <div
-                                className="absolute bg-white border border-slate-200 rounded-md shadow-lg p-3 z-10 flex flex-col space-y-2 text-black"
+                                className="fixed bg-white border border-slate-200 rounded-md shadow-lg px-3 py-2 z-30 flex items-center space-x-3 text-black"
                                 style={{
-                                  top: 'calc(100% + 10px)',
-                                  left: '50%',
-                                  transform: 'translateX(-50%)',
+                                  top: `${imagePanelPos.top - 8}px`,
+                                  left: `${imagePanelPos.left}px`,
+                                  transform: 'translate(-50%, -100%)',
                                   color: '#000',
-                                  minWidth: '280px',
+                                  minWidth: '320px',
                                 }}
                                 onMouseDown={(e) => e.stopPropagation()}
                                 onClick={(e) => e.stopPropagation()}
                               >
-                                <div className="flex items-center justify-between">
-                                  <span className="text-xs text-slate-600">Tamaño</span>
+                                {/* Tipo de forma - dropdown con iconos */}
+                                <div className="relative" onMouseDown={(e) => e.stopPropagation()} onClick={(e) => e.stopPropagation()}>
+                                  <button
+                                    className="px-2 py-1 text-sm rounded border border-slate-300 bg-white text-black"
+                                    onClick={() => setShowShapeKindOptions((v) => !v)}
+                                  >
+                                    Forma ▾
+                                  </button>
+                                  {showShapeKindOptions && (
+                                    <div className="absolute top-full left-0 mt-2 bg-white border border-slate-200 rounded-md shadow-lg p-2 z-40 flex flex-col space-y-2">
+                                      <button
+                                        className="w-36 h-10 border border-slate-300 rounded flex items-center space-x-2 px-2 hover:bg-slate-50"
+                                        title="Rectángulo"
+                                        onClick={() => {
+                                          setCanvasElements((prev) => prev.map((el) => (el.id === element.id ? { ...el, shapeKind: 'rectangle' } : el)));
+                                          setShowShapeKindOptions(false);
+                                        }}
+                                      >
+                                        <svg viewBox="0 0 100 100" className="w-7 h-7"><rect x="15" y="30" width="70" height="40" rx="0" fill="#94a3b8"/></svg>
+                                        <span className="text-xs text-slate-700">Rectángulo</span>
+                                      </button>
+                                      <button
+                                        className="w-36 h-10 border border-slate-300 rounded flex items-center space-x-2 px-2 hover:bg-slate-50"
+                                        title="Cuadrado"
+                                        onClick={() => {
+                                          setCanvasElements((prev) => prev.map((el) => {
+                                            if (el.id !== element.id) return el;
+                                            const size = Math.max(1, Math.min(el.width, el.height));
+                                            const centerX = el.x + (el.width / 2);
+                                            const centerY = el.y + (el.height / 2);
+                                            return { ...el, shapeKind: 'square', borderRadius: 0, width: size, height: size, x: Math.round(centerX - size/2), y: Math.round(centerY - size/2) };
+                                          }));
+                                          setShowShapeKindOptions(false);
+                                        }}
+                                      >
+                                        <svg viewBox="0 0 100 100" className="w-7 h-7"><rect x="25" y="25" width="50" height="50" fill="#94a3b8"/></svg>
+                                        <span className="text-xs text-slate-700">Cuadrado</span>
+                                      </button>
+                                      <button
+                                        className="w-36 h-10 border border-slate-300 rounded flex items-center space-x-2 px-2 hover:bg-slate-50"
+                                        title="Círculo"
+                                        onClick={() => {
+                                          setCanvasElements((prev) => prev.map((el) => {
+                                            if (el.id !== element.id) return el;
+                                            const size = Math.max(1, Math.min(el.width, el.height));
+                                            const centerX = el.x + (el.width / 2);
+                                            const centerY = el.y + (el.height / 2);
+                                            return { ...el, shapeKind: 'circle', borderRadius: 50, width: size, height: size, x: Math.round(centerX - size/2), y: Math.round(centerY - size/2) };
+                                          }));
+                                          setShowShapeKindOptions(false);
+                                        }}
+                                      >
+                                        <svg viewBox="0 0 100 100" className="w-7 h-7"><circle cx="50" cy="50" r="28" fill="#94a3b8"/></svg>
+                                        <span className="text-xs text-slate-700">Círculo</span>
+                                      </button>
+                                      <button
+                                        className="w-36 h-10 border border-slate-300 rounded flex items-center space-x-2 px-2 hover:bg-slate-50"
+                                        title="Triángulo"
+                                        onClick={() => {
+                                          setCanvasElements((prev) => prev.map((el) => (el.id === element.id ? { ...el, shapeKind: 'triangle' } : el)));
+                                          setShowShapeKindOptions(false);
+                                        }}
+                                      >
+                                        <svg viewBox="0 0 100 100" className="w-7 h-7"><polygon points="50,20 80,80 20,80" fill="#94a3b8"/></svg>
+                                        <span className="text-xs text-slate-700">Triángulo</span>
+                                      </button>
+                                      <button
+                                        className="w-36 h-10 border border-slate-300 rounded flex items-center space-x-2 px-2 hover:bg-slate-50"
+                                        title="Flecha"
+                                        onClick={() => {
+                                          setCanvasElements((prev) => prev.map((el) => (el.id === element.id ? { ...el, shapeKind: 'arrow' } : el)));
+                                          setShowShapeKindOptions(false);
+                                        }}
+                                      >
+                                        <svg viewBox="0 0 100 100" className="w-7 h-7"><path d="M20 40 H60 V30 L85 50 L60 70 V60 H20 Z" fill="#94a3b8"/></svg>
+                                        <span className="text-xs text-slate-700">Flecha</span>
+                                      </button>
+                                    </div>
+                                  )}
+                                </div>
+                                {/* Color relleno */}
+                                <div className="flex items-center space-x-1">
+                                  <label className="text-xs text-slate-600">Relleno</label>
+                                  <input
+                                    type="color"
+                                    className="w-8 h-8 p-0 border border-slate-300 rounded bg-white"
+                                    value={element.backgroundColor || '#60a5fa'}
+                                    onChange={(e) => {
+                                      const v = e.target.value;
+                                      setCanvasElements((prev) => prev.map((el) => (el.id === element.id ? { ...el, backgroundColor: v } : el)));
+                                    }}
+                                  />
+                                </div>
+                                {/* Borde */}
+                                <div className="flex items-center space-x-1">
+                                  <label className="text-xs text-slate-600">Borde</label>
+                                  <input
+                                    type="number"
+                                    className="w-16 border border-slate-300 rounded px-2 py-1 text-sm bg-white text-black"
+                                    min={0}
+                                    max={20}
+                                    step={1}
+                                    value={Number(element.borderWidth ?? 0)}
+                                    onChange={(e) => {
+                                      const v = Math.max(0, Math.min(20, parseInt(e.target.value, 10) || 0));
+                                      setCanvasElements((prev) => prev.map((el) => (el.id === element.id ? { ...el, borderWidth: v } : el)));
+                                    }}
+                                  />
+                                  <input
+                                    type="color"
+                                    className="w-8 h-8 p-0 border border-slate-300 rounded bg-white"
+                                    value={element.borderColor || '#94a3b8'}
+                                    onChange={(e) => {
+                                      const v = e.target.value;
+                                      setCanvasElements((prev) => prev.map((el) => (el.id === element.id ? { ...el, borderColor: v } : el)));
+                                    }}
+                                  />
+                                  <select
+                                    className="border border-slate-300 rounded px-2 py-1 text-sm bg-white text-black"
+                                    value={element.borderStyle || 'solid'}
+                                    onChange={(e) => {
+                                      const v = e.target.value as 'solid' | 'dashed';
+                                      setCanvasElements((prev) => prev.map((el) => (el.id === element.id ? { ...el, borderStyle: v } : el)));
+                                    }}
+                                  >
+                                    <option value="solid">Continua</option>
+                                    <option value="dashed">Discontinua</option>
+                                  </select>
+                                </div>
+                                {/* Esquinas (para rectángulo/cuadrado) */}
+                                <div className="flex items-center space-x-1">
+                                  <label className="text-xs text-slate-600">Esquinas</label>
+                                  <input
+                                    type="range"
+                                    min={0}
+                                    max={100}
+                                    step={1}
+                                    value={Number(element.borderRadius ?? 0)}
+                                    onChange={(e) => {
+                                      const v = Math.max(0, Math.min(100, parseInt(e.target.value, 10) || 0));
+                                      setCanvasElements((prev) => prev.map((el) => (el.id === element.id ? { ...el, borderRadius: v } : el)));
+                                    }}
+                                  />
+                                  <input
+                                    type="number"
+                                    className="w-16 border border-slate-300 rounded px-2 py-1 text-sm bg-white text-black"
+                                    min={0}
+                                    max={100}
+                                    step={1}
+                                    value={Number(element.borderRadius ?? 0)}
+                                    onChange={(e) => {
+                                      const v = Math.max(0, Math.min(100, parseInt(e.target.value, 10) || 0));
+                                      setCanvasElements((prev) => prev.map((el) => (el.id === element.id ? { ...el, borderRadius: v } : el)));
+                                    }}
+                                  />
+                                  <span className="text-xs text-slate-500">%</span>
+                                </div>
+                              </div>
+                            )}
+                            {showElementPanel && element.type === 'image' && (
+                              <div
+                                className="fixed bg-white border border-slate-200 rounded-md shadow-lg px-3 py-2 z-30 flex items-center space-x-3 text-black"
+                                style={{
+                                  top: `${imagePanelPos.top - 8}px`,
+                                  left: `${imagePanelPos.left}px`,
+                                  transform: 'translate(-50%, -100%)',
+                                  color: '#000',
+                                  minWidth: '320px',
+                                }}
+                                onMouseDown={(e) => e.stopPropagation()}
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                <div className="relative">
                                   <button
                                     className="px-2 py-1 text-xs rounded border border-slate-300 bg-white text-black"
-                                    onClick={() => setShowImageSizeOptions((v) => !v)}
+                                    onClick={() => {
+                                      setShowImageSizeOptions((v) => !v);
+                                      setShowImageCornersOptions(false);
+                                      setShowImageBorderOptions(false);
+                                      setShowImageOpacityOptions(false);
+                                      setShowImageFiltersOptions(false);
+                                    }}
                                   >
-                                    {showImageSizeOptions ? 'Ocultar' : 'Mostrar'}
+                                    Tamaño ▾
                                   </button>
-                                </div>
-                                {showImageSizeOptions && (
-                                  <div className="flex flex-col space-y-2">
+                                  {showImageSizeOptions && (
+                                  <div className="absolute top-full left-0 mt-2 bg-white border border-slate-200 rounded-md shadow-lg p-2 z-40 w-[260px]">
                                     <label className="flex items-center space-x-2 text-xs text-slate-600">
                                       <input
                                         type="checkbox"
@@ -926,18 +1487,21 @@ function App() {
                                       </div>
                                     </div>
                                   </div>
-                                )}
-                                <div className="flex items-center justify-between">
-                                  <span className="text-xs text-slate-600">Esquinas</span>
+                                  )}
+                                </div>
+                                <div className="relative">
                                   <button
                                     className="px-2 py-1 text-xs rounded border border-slate-300 bg-white text-black"
-                                    onClick={() => setShowImageCornersOptions((v) => !v)}
-                                  >
-                                    {showImageCornersOptions ? 'Ocultar' : 'Mostrar'}
-                                  </button>
-                                </div>
-                                {showImageCornersOptions && (
-                                  <div className="flex items-center space-x-2">
+                                    onClick={() => {
+                                      setShowImageCornersOptions((v) => !v);
+                                      setShowImageSizeOptions(false);
+                                      setShowImageBorderOptions(false);
+                                      setShowImageOpacityOptions(false);
+                                      setShowImageFiltersOptions(false);
+                                    }}
+                                  >Esquinas ▾</button>
+                                  {showImageCornersOptions && (
+                                  <div className="absolute top-full left-0 mt-2 bg-white border border-slate-200 rounded-md shadow-lg p-2 z-40 w-[220px] flex items-center space-x-2">
                                     <input
                                       type="range"
                                       min={0}
@@ -967,19 +1531,22 @@ function App() {
                                     />
                                     <span className="text-xs text-slate-500">%</span>
                                   </div>
-                                )}
+                                  )}
+                                </div>
 
-                                <div className="flex items-center justify-between">
-                                  <span className="text-xs text-slate-600">Borde</span>
+                                <div className="relative">
                                   <button
                                     className="px-2 py-1 text-xs rounded border border-slate-300 bg-white text-black"
-                                    onClick={() => setShowImageBorderOptions((v) => !v)}
-                                  >
-                                    {showImageBorderOptions ? 'Ocultar' : 'Mostrar'}
-                                  </button>
-                                </div>
-                                {showImageBorderOptions && (
-                                  <div className="flex items-center space-x-2">
+                                    onClick={() => {
+                                      setShowImageBorderOptions((v) => !v);
+                                      setShowImageSizeOptions(false);
+                                      setShowImageCornersOptions(false);
+                                      setShowImageOpacityOptions(false);
+                                      setShowImageFiltersOptions(false);
+                                    }}
+                                  >Borde ▾</button>
+                                  {showImageBorderOptions && (
+                                  <div className="absolute top-full left-0 mt-2 bg-white border border-slate-200 rounded-md shadow-lg p-2 z-40 w-[260px] flex items-center space-x-2">
                                     <input
                                       type="number"
                                       className="w-16 border border-slate-300 rounded px-2 py-1 text-sm bg-white text-black"
@@ -1019,19 +1586,22 @@ function App() {
                                       <option value="dashed">Discontinua</option>
                                     </select>
                                   </div>
-                                )}
+                                  )}
+                                </div>
 
-                                <div className="flex items-center justify-between">
-                                  <span className="text-xs text-slate-600">Transparencia</span>
+                                <div className="relative">
                                   <button
                                     className="px-2 py-1 text-xs rounded border border-slate-300 bg-white text-black"
-                                    onClick={() => setShowImageOpacityOptions((v) => !v)}
-                                  >
-                                    {showImageOpacityOptions ? 'Ocultar' : 'Mostrar'}
-                                  </button>
-                                </div>
-                                {showImageOpacityOptions && (
-                                  <div className="flex items-center space-x-2">
+                                    onClick={() => {
+                                      setShowImageOpacityOptions((v) => !v);
+                                      setShowImageSizeOptions(false);
+                                      setShowImageCornersOptions(false);
+                                      setShowImageBorderOptions(false);
+                                      setShowImageFiltersOptions(false);
+                                    }}
+                                  >Transparencia ▾</button>
+                                  {showImageOpacityOptions && (
+                                  <div className="absolute top-full left-0 mt-2 bg-white border border-slate-200 rounded-md shadow-lg p-2 z-40 w-[240px] flex items-center space-x-2">
                                     <input
                                       type="range"
                                       min={0}
@@ -1061,20 +1631,23 @@ function App() {
                                     />
                                     <span className="text-xs text-slate-500">%</span>
                                   </div>
-                                )}
+                                  )}
+                                </div>
 
-                                <div className="flex items-center justify-between">
-                                  <span className="text-xs text-slate-600">Filtros</span>
+                                <div className="relative">
                                   <button
                                     className="px-2 py-1 text-xs rounded border border-slate-300 bg-white text-black"
-                                    onClick={() => setShowImageFiltersOptions((v) => !v)}
-                                  >
-                                    {showImageFiltersOptions ? 'Ocultar' : 'Mostrar'}
-                                  </button>
-                                </div>
-                                {showImageFiltersOptions && (
+                                    onClick={() => {
+                                      setShowImageFiltersOptions((v) => !v);
+                                      setShowImageSizeOptions(false);
+                                      setShowImageCornersOptions(false);
+                                      setShowImageBorderOptions(false);
+                                      setShowImageOpacityOptions(false);
+                                    }}
+                                  >Filtros ▾</button>
+                                  {showImageFiltersOptions && (
                                   <div
-                                    className="grid grid-cols-2 gap-2 max-h-64 overflow-y-auto pr-2"
+                                    className="absolute top-full left-0 mt-2 bg-white border border-slate-200 rounded-md shadow-lg p-2 z-40 w-[300px] grid grid-cols-2 gap-2 max-h-64 overflow-y-auto pr-2"
                                     style={{ overscrollBehavior: 'contain' }}
                                     onWheel={(e) => e.stopPropagation()}
                                   >
@@ -1135,16 +1708,17 @@ function App() {
                                       }}
                                     />
                                   </div>
-                                )}
+                                  )}
+                                </div>
                               </div>
                             )}
                             {showElementPanel && element.type === 'text' && (
                               <div
-                                className="absolute bg-white border border-slate-200 rounded-md shadow-lg p-3 z-10 flex items-center space-x-2 text-black"
+                                className="fixed bg-white border border-slate-200 rounded-md shadow-lg p-3 z-30 flex items-center space-x-2 text-black"
                                 style={{
-                                  top: 'calc(100% + 10px)',
-                                  left: '50%',
-                                  transform: 'translateX(-50%)',
+                                  top: `${imagePanelPos.top - 8}px`,
+                                  left: `${imagePanelPos.left}px`,
+                                  transform: 'translate(-50%, -100%)',
                                   color: '#000',
                                 }}
                                 onMouseDown={(e) => e.stopPropagation()}
@@ -1201,21 +1775,39 @@ function App() {
                                     />
                                 </div>
                                 {/* Background color */}
-                                <div className="flex items-center space-x-1">
+                                <div className="flex items-center space-x-2">
                                   <label className="text-xs text-slate-600">Fondo</label>
                                   <input
                                     type="color"
                                     className="w-8 h-8 p-0 border border-slate-300 rounded bg-white"
-                                    value={element.backgroundColor || '#ffffff'}
+                                    disabled={element.backgroundColor === 'transparent'}
+                                    value={element.backgroundColor && element.backgroundColor !== 'transparent' ? element.backgroundColor : '#ffffff'}
                                     onChange={(e) => {
                                       const v = e.target.value;
                                       setCanvasElements((prev) =>
                                         prev.map((el) =>
                                           el.id === element.id ? { ...el, backgroundColor: v } : el
+                                        )
+                                      );
+                                    }}
+                                  />
+                                  <label className="text-xs text-slate-600 flex items-center space-x-1">
+                                    <input
+                                      type="checkbox"
+                                      checked={element.backgroundColor === 'transparent'}
+                                      onChange={(e) => {
+                                        const transparent = e.target.checked;
+                                        setCanvasElements((prev) =>
+                                          prev.map((el) =>
+                                            el.id === element.id
+                                              ? { ...el, backgroundColor: transparent ? 'transparent' : (el.backgroundColor && el.backgroundColor !== 'transparent' ? el.backgroundColor : '#ffffff') }
+                                              : el
                                           )
                                         );
-                                    }}
+                                      }}
                                     />
+                                    <span>Transparente</span>
+                                  </label>
                                 </div>
                                 {/* Border width */}
                                 <div className="flex items-center space-x-1">
@@ -1259,16 +1851,16 @@ function App() {
                                     <option value="dashed">Discontinua</option>
                                   </select>
                                 </div>
-                                {/* Corners (inside text panel, collapsible) */}
-                                <div className="flex flex-col">
+                                {/* Corners (text) dropdown opening downward */}
+                                <div className="relative">
                                   <button
                                     className="px-2 py-1 text-sm rounded border border-slate-300 bg-white text-black"
                                     onClick={() => setShowCornersOptions((v) => !v)}
                                   >
-                                    Esquinas {showCornersOptions ? '▴' : '▾'}
+                                    Esquinas ▾
                                   </button>
                                   {showCornersOptions && (
-                                    <div className="mt-2 flex items-center space-x-2">
+                                    <div className="absolute top-full left-0 mt-2 bg-white border border-slate-200 rounded-md shadow-lg p-2 z-40 flex items-center space-x-2">
                                       <label className="text-xs text-slate-600">0–100%</label>
                                       <input
                                         type="range"
@@ -1369,7 +1961,8 @@ function App() {
       {/* Background settings panel (top, when clicking background) */}
       {showBackgroundPanel && (
         <div
-          className="absolute top-16 left-1/2 -translate-x-1/2 bg-white text-black border border-slate-200 rounded-md shadow-lg p-3 z-20 flex items-center space-x-3"
+          className="fixed bg-white text-black border border-slate-200 rounded-md shadow-lg p-3 z-30 flex items-center space-x-3"
+          style={{ top: `${imagePanelPos.top - 8}px`, left: `${imagePanelPos.left}px`, transform: 'translate(-50%, -100%)' }}
           onMouseDown={(e) => e.stopPropagation()}
           onClick={(e) => e.stopPropagation()}
         >
@@ -1412,6 +2005,18 @@ function App() {
             Cerrar
           </button>
         </div>
+      )}
+      {/* Marquee selection overlay */}
+      {marquee.active && (
+        <div
+          className="fixed pointer-events-none border-2 border-blue-400/60 bg-blue-200/10 z-40"
+          style={{
+            left: `${Math.min(marquee.startX, marquee.currentX)}px`,
+            top: `${Math.min(marquee.startY, marquee.currentY)}px`,
+            width: `${Math.abs(marquee.currentX - marquee.startX)}px`,
+            height: `${Math.abs(marquee.currentY - marquee.startY)}px`,
+          }}
+        />
       )}
     </div>
   );
