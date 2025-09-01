@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Type, Image as ImageIcon, Upload, MousePointer, Square, Circle, Minus } from 'lucide-react';
+import { Type, Image as ImageIcon, MousePointer, Square, Circle, Minus } from 'lucide-react';
 
 function App() {
   type CanvasElement = {
@@ -41,20 +41,25 @@ function App() {
   const [showImageBorderOptions, setShowImageBorderOptions] = useState<boolean>(false);
   const [showImageFiltersOptions, setShowImageFiltersOptions] = useState<boolean>(false);
   const [showImageOpacityOptions, setShowImageOpacityOptions] = useState<boolean>(false);
+  const [showImageSizeOptions, setShowImageSizeOptions] = useState<boolean>(false);
+  const [imageKeepAspect, setImageKeepAspect] = useState<boolean>(true);
   const [showBackgroundPanel, setShowBackgroundPanel] = useState<boolean>(false);
+  // Fondo sólido: color + transparencia
   const [backgroundColor, setBackgroundColor] = useState<string>("#ffffff");
   const [backgroundOpacity, setBackgroundOpacity] = useState<number>(100);
-  const [backgroundImage, setBackgroundImage] = useState<string | null>(null);
-  const [showBackgroundImageDialog, setShowBackgroundImageDialog] = useState<boolean>(false);
+
+  // Deshabilitado: imagen de fondo (se mantienen referencias para evitar errores)
+  // No se usa; la subida de imagen de fondo está eliminada
+  const setBackgroundImage = (_: string | null) => {};
+  const showBackgroundImageDialog = false;
+  const setShowBackgroundImageDialog = (_: boolean) => {};
 
   const hexToRgba = (hex: string, alphaPercent: number) => {
     let h = hex.replace('#', '');
-    if (h.length === 3) {
-      h = h.split('').map((c) => c + c).join('');
-    }
-    const r = parseInt(h.substring(0, 2), 16);
-    const g = parseInt(h.substring(2, 4), 16);
-    const b = parseInt(h.substring(4, 6), 16);
+    if (h.length === 3) h = h.split('').map((c) => c + c).join('');
+    const r = parseInt(h.substring(0, 2), 16) || 255;
+    const g = parseInt(h.substring(2, 4), 16) || 255;
+    const b = parseInt(h.substring(4, 6), 16) || 255;
     const a = Math.max(0, Math.min(100, alphaPercent)) / 100;
     return `rgba(${r}, ${g}, ${b}, ${a})`;
   };
@@ -408,17 +413,12 @@ function App() {
         
           {/* Interactive Canvas Zone */}
           <div
-            className="relative w-[60%] h-[70%] rounded-2xl shadow-2xl border-2 border-dashed border-slate-300 hover:border-blue-400 transition-all duration-300 cursor-pointer group overflow-hidden"
-            style={{
-              backgroundColor: hexToRgba(backgroundColor, backgroundOpacity),
-              backgroundImage: backgroundImage ? `url(${backgroundImage})` : undefined,
-              backgroundSize: backgroundImage ? 'cover' : undefined,
-              backgroundRepeat: backgroundImage ? 'no-repeat' : undefined,
-              backgroundPosition: backgroundImage ? 'center' : undefined,
-            }}
+            className="relative w-[60%] h-[70%] bg-white rounded-2xl shadow-2xl border-2 border-dashed border-slate-300 hover:border-blue-400 transition-all duration-300 cursor-pointer group overflow-hidden"
+            style={{ backgroundColor: hexToRgba(backgroundColor, backgroundOpacity) }}
           >
+            {/* Background image layer removed (solo color sólido) */}
             {/* Canvas Background Pattern */}
-            <div className="absolute inset-0 opacity-5">
+            <div className="absolute inset-0 opacity-5 z-10 pointer-events-none">
               <div className="w-full h-full" style={{
                 backgroundImage: `radial-gradient(circle at 1px 1px, rgba(0,0,0,0.15) 1px, transparent 0)`,
                 backgroundSize: '20px 20px'
@@ -440,21 +440,12 @@ function App() {
                 setShowBackgroundPanel(true);
               }}
             >
-              {canvasElements.length === 0 && !backgroundImage ? (
+              {canvasElements.length === 0 ? (
                 <div className="flex flex-col items-center justify-center h-full text-center">
-                  <button
-                    className="w-16 h-16 bg-gradient-to-br from-blue-100 to-blue-200 rounded-full flex items-center justify-center mb-4 group-hover:scale-110 transition-transform duration-300"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setShowBackgroundImageDialog(true);
-                    }}
-                  >
-                    <Upload className="w-8 h-8 text-blue-600" />
-                  </button>
                   <h3 className="text-xl font-semibold text-slate-700 mb-2">
                     Haz clic para cambiar el color de fondo
                   </h3>
-                  <p className="text-slate-500 mb-1">o subir una imagen</p>
+                  
                   <p className="text-sm text-slate-400">
                     Usa las herramientas de la izquierda para añadir contenido
                   </p>
@@ -849,6 +840,74 @@ function App() {
                                 onMouseDown={(e) => e.stopPropagation()}
                                 onClick={(e) => e.stopPropagation()}
                               >
+                                <div className="flex items-center justify-between">
+                                  <span className="text-xs text-slate-600">Tamaño</span>
+                                  <button
+                                    className="px-2 py-1 text-xs rounded border border-slate-300 bg-white text-black"
+                                    onClick={() => setShowImageSizeOptions((v) => !v)}
+                                  >
+                                    {showImageSizeOptions ? 'Ocultar' : 'Mostrar'}
+                                  </button>
+                                </div>
+                                {showImageSizeOptions && (
+                                  <div className="flex flex-col space-y-2">
+                                    <label className="flex items-center space-x-2 text-xs text-slate-600">
+                                      <input
+                                        type="checkbox"
+                                        className="accent-blue-600"
+                                        checked={imageKeepAspect}
+                                        onChange={(e) => setImageKeepAspect(e.target.checked)}
+                                      />
+                                      <span>Mantener proporción</span>
+                                    </label>
+                                    <div className="grid grid-cols-2 gap-2">
+                                      <div className="flex items-center space-x-1">
+                                        <span className="text-xs text-slate-600">Ancho</span>
+                                        <input
+                                          type="number"
+                                          className="w-20 border border-slate-300 rounded px-2 py-1 text-sm bg-white text-black"
+                                          min={20}
+                                          max={4000}
+                                          step={1}
+                                          value={Number(element.width || 0)}
+                                          onChange={(e) => {
+                                            const w = Math.max(20, Math.min(4000, parseInt(e.target.value, 10) || 0));
+                                            if (imageKeepAspect && (element.width ?? 0) > 0 && (element.height ?? 0) > 0) {
+                                              const aspect = (element.height as number) > 0 ? (element.width as number) / (element.height as number) : 1;
+                                              const h = Math.max(20, Math.round(w / aspect));
+                                              setCanvasElements((prev) => prev.map((el) => el.id === element.id ? { ...el, width: w, height: h } : el));
+                                            } else {
+                                              setCanvasElements((prev) => prev.map((el) => el.id === element.id ? { ...el, width: w } : el));
+                                            }
+                                          }}
+                                        />
+                                        <span className="text-xs text-slate-500">px</span>
+                                      </div>
+                                      <div className="flex items-center space-x-1">
+                                        <span className="text-xs text-slate-600">Alto</span>
+                                        <input
+                                          type="number"
+                                          className="w-20 border border-slate-300 rounded px-2 py-1 text-sm bg-white text-black"
+                                          min={20}
+                                          max={4000}
+                                          step={1}
+                                          value={Number(element.height || 0)}
+                                          onChange={(e) => {
+                                            const h = Math.max(20, Math.min(4000, parseInt(e.target.value, 10) || 0));
+                                            if (imageKeepAspect && (element.width ?? 0) > 0 && (element.height ?? 0) > 0) {
+                                              const aspect = (element.height as number) > 0 ? (element.width as number) / (element.height as number) : 1;
+                                              const w = Math.max(20, Math.round(h * aspect));
+                                              setCanvasElements((prev) => prev.map((el) => el.id === element.id ? { ...el, width: w, height: h } : el));
+                                            } else {
+                                              setCanvasElements((prev) => prev.map((el) => el.id === element.id ? { ...el, height: h } : el));
+                                            }
+                                          }}
+                                        />
+                                        <span className="text-xs text-slate-500">px</span>
+                                      </div>
+                                    </div>
+                                  </div>
+                                )}
                                 <div className="flex items-center justify-between">
                                   <span className="text-xs text-slate-600">Esquinas</span>
                                   <button
@@ -1295,6 +1354,7 @@ function App() {
           onMouseDown={(e) => e.stopPropagation()}
           onClick={(e) => e.stopPropagation()}
         >
+          {/* Color */}
           <div className="flex items-center space-x-2">
             <label className="text-xs text-slate-600">Color</label>
             <input
@@ -1304,6 +1364,7 @@ function App() {
               onChange={(e) => setBackgroundColor(e.target.value)}
             />
           </div>
+          {/* Transparencia */}
           <div className="flex items-center space-x-2">
             <label className="text-xs text-slate-600">Transparencia</label>
             <input
