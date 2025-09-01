@@ -44,6 +44,7 @@ function App() {
   const [showImageSizeOptions, setShowImageSizeOptions] = useState<boolean>(false);
   const [imageKeepAspect, setImageKeepAspect] = useState<boolean>(true);
   const [showBackgroundPanel, setShowBackgroundPanel] = useState<boolean>(false);
+  const [showElementPanel, setShowElementPanel] = useState<boolean>(false);
   // Fondo sólido: color + transparencia
   const [backgroundColor, setBackgroundColor] = useState<string>("#ffffff");
   const [backgroundOpacity, setBackgroundOpacity] = useState<number>(100);
@@ -88,6 +89,21 @@ function App() {
   });
 
   // Asegurar que al soltar el ratón en cualquier lugar se termine la acción
+  useEffect(() => {
+    const handleGlobalClick = () => {
+      setShowEffectDropdown(false);
+      setShowCornersOptions(false);
+      setShowImageCornersOptions(false);
+      setShowImageBorderOptions(false);
+      setShowImageFiltersOptions(false);
+      setShowImageOpacityOptions(false);
+      setShowElementPanel(false);
+      // No deseleccionamos; solo cerramos desplegables
+    };
+    window.addEventListener('click', handleGlobalClick);
+    return () => window.removeEventListener('click', handleGlobalClick);
+  }, []);
+
   useEffect(() => {
     const handleWindowMouseUp = () => {
       setAction({
@@ -437,6 +453,7 @@ function App() {
                 setShowImageBorderOptions(false);
                 setShowImageFiltersOptions(false);
                 setShowImageOpacityOptions(false);
+                setShowElementPanel(false);
                 setShowBackgroundPanel(true);
               }}
             >
@@ -572,12 +589,14 @@ function App() {
                         setShowImageFiltersOptions(false);
                         setShowImageOpacityOptions(false);
                         setShowBackgroundPanel(false);
+                        setShowElementPanel(true);
                       }}
                       onDoubleClick={(e) => {
                         if (element.type === 'text') {
                           e.stopPropagation();
                           setSelectedElementId(element.id);
                           setEditingTextId(element.id);
+                          setShowElementPanel(true);
                         }
                       }}
                       style={{
@@ -827,7 +846,7 @@ function App() {
                                 </button>
                               </div>
                             )}
-                            {element.type === 'image' && (
+                            {showElementPanel && element.type === 'image' && (
                               <div
                                 className="absolute bg-white border border-slate-200 rounded-md shadow-lg p-3 z-10 flex flex-col space-y-2 text-black"
                                 style={{
@@ -1119,7 +1138,7 @@ function App() {
                                 )}
                               </div>
                             )}
-                            {element.type === 'text' && (
+                            {showElementPanel && element.type === 'text' && (
                               <div
                                 className="absolute bg-white border border-slate-200 rounded-md shadow-lg p-3 z-10 flex items-center space-x-2 text-black"
                                 style={{
