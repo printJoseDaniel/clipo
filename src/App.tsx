@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Type, Image as ImageIcon, MousePointer, Square, Lock, Unlock, Shapes } from 'lucide-react';
+import { Type, Image as ImageIcon, MousePointer, Square, Lock, Unlock, Shapes, Trash2, AlignLeft, AlignCenter, AlignRight, AlignJustify } from 'lucide-react';
 
 function App() {
   type CanvasElement = {
@@ -15,6 +15,7 @@ function App() {
     fontFamily?: string;
     fontWeight?: 'normal' | 'bold';
     fontStyle?: 'normal' | 'italic';
+    textAlign?: 'left' | 'center' | 'right' | 'justify';
     borderRadius?: number; // 0-100 (porcentaje)
     borderWidth?: number; // px
     borderColor?: string;
@@ -22,6 +23,12 @@ function App() {
     backgroundColor?: string; // for text box background
     locked?: boolean;
     shapeKind?: 'rectangle' | 'square' | 'circle' | 'triangle' | 'diamond' | 'star' | 'arrow' | 'line' | 'pentagon' | 'hexagon';
+    // Imagen: posicionamiento interno para recorte
+    imgScale?: number;
+    imgOffsetX?: number;
+    imgOffsetY?: number;
+    imgNatW?: number;
+    imgNatH?: number;
     // Imagen: filtros y transparencia
     opacity?: number; // 0-100
     brightness?: number; // 0-200
@@ -46,6 +53,9 @@ function App() {
   const [showImageOpacityOptions, setShowImageOpacityOptions] = useState<boolean>(false);
   const [showImageSizeOptions, setShowImageSizeOptions] = useState<boolean>(false);
   const [imageKeepAspect, setImageKeepAspect] = useState<boolean>(true);
+  const [cropping, setCropping] = useState<{active: boolean; elementId: number | null; backup?: {imgScale: number; imgOffsetX: number; imgOffsetY: number}}>(
+    { active: false, elementId: null, backup: undefined }
+  );
   const [showBackgroundPanel, setShowBackgroundPanel] = useState<boolean>(false);
   const [showLayersPanel, setShowLayersPanel] = useState<boolean>(false);
   const [showElementPanel, setShowElementPanel] = useState<boolean>(false);
@@ -56,6 +66,317 @@ function App() {
   const [marquee, setMarquee] = useState<{ active: boolean; startX: number; startY: number; currentX: number; currentY: number }>({ active: false, startX: 0, startY: 0, currentX: 0, currentY: 0 });
   const [showIntro, setShowIntro] = useState<boolean>(true);
   const [showShapeKindOptions, setShowShapeKindOptions] = useState<boolean>(false);
+  // Zoom del lienzo
+  const [zoom, setZoom] = useState<number>(1);
+  const clampZoom = (z: number) => Math.max(0.25, Math.min(4, Math.round(z * 100) / 100));
+  // Nombre del proyecto (editable desde el título)
+  const [projectName, setProjectName] = useState<string>('Presentación sin título');
+  const [editingProjectName, setEditingProjectName] = useState<boolean>(false);
+  // Guias de alineación (centros) durante movimiento
+  const [guideOverlay, setGuideOverlay] = useState<{
+    v: number[];
+    h: number[];
+    bounds: { left: number; top: number; width: number; height: number } | null;
+  }>({ v: [], h: [], bounds: null });
+  // Modo presentación
+  const [presenting, setPresenting] = useState<{ active: boolean; cw: number; ch: number; scale: number }>({ active: false, cw: 0, ch: 0, scale: 1 });
+  
+  // Utilidades de dibujo para exportación
+  const roundedRectPath = (ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, radiusPercent?: number) => {
+    const rp = Math.max(0, Math.min(100, radiusPercent ?? 0));
+    const r = (rp / 100) * (Math.min(w, h) / 2);
+    const rClamped = Math.min(r, w / 2, h / 2);
+    ctx.beginPath();
+    if (rClamped <= 0) {
+      ctx.rect(x, y, w, h);
+      return;
+    }
+    ctx.moveTo(x + rClamped, y);
+    ctx.lineTo(x + w - rClamped, y);
+    ctx.quadraticCurveTo(x + w, y, x + w, y + rClamped);
+    ctx.lineTo(x + w, y + h - rClamped);
+    ctx.quadraticCurveTo(x + w, y + h, x + w - rClamped, y + h);
+    ctx.lineTo(x + rClamped, y + h);
+    ctx.quadraticCurveTo(x, y + h, x, y + h - rClamped);
+    ctx.lineTo(x, y + rClamped);
+    ctx.quadraticCurveTo(x, y, x + rClamped, y);
+  };
+
+  const drawTrianglePath = (ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number) => {
+    ctx.beginPath();
+    ctx.moveTo(x + 0.5 * w, y + 0.1 * h);
+    ctx.lineTo(x + 0.9 * w, y + 0.9 * h);
+    ctx.lineTo(x + 0.1 * w, y + 0.9 * h);
+    ctx.closePath();
+  };
+
+  const drawArrowPath = (ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number) => {
+    // Escala del path SVG M20 40 H60 V30 L85 50 L60 70 V60 H20 Z en un viewBox 100x100
+    const p = (px: number, py: number) => [x + (px / 100) * w, y + (py / 100) * h] as const;
+    const [x1, y1] = p(20, 40);
+    const [x2, y2] = p(60, 40);
+    const [x3, y3] = p(60, 30);
+    const [x4, y4] = p(85, 50);
+    const [x5, y5] = p(60, 70);
+    const [x6, y6] = p(60, 60);
+    const [x7, y7] = p(20, 60);
+    ctx.beginPath();
+    ctx.moveTo(x1, y1);
+    ctx.lineTo(x2, y2);
+    ctx.lineTo(x3, y3);
+    ctx.lineTo(x4, y4);
+    ctx.lineTo(x5, y5);
+    ctx.lineTo(x6, y6);
+    ctx.lineTo(x7, y7);
+    ctx.closePath();
+  };
+
+  const loadImage = (src: string) => new Promise<HTMLImageElement>((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = reject;
+    img.src = src;
+  });
+
+  const buildCanvasFilter = (el: CanvasElement) => {
+    const brightness = el.brightness ?? 100;
+    const contrast = el.contrast ?? 100;
+    const saturate = el.saturate ?? 100;
+    const hueRotate = el.hueRotate ?? 0;
+    const grayscale = el.grayscale ?? 0;
+    const sepia = el.sepia ?? 0;
+    const blur = el.blur ?? 0;
+    return `brightness(${brightness}%) contrast(${contrast}%) saturate(${saturate}%) hue-rotate(${hueRotate}deg) grayscale(${grayscale}%) sepia(${sepia}%) blur(${blur}px)`;
+  };
+
+  const handleExport = async () => {
+    const areaEl = canvasAreaRef.current;
+    if (!areaEl) return;
+    const width = Math.max(1, areaEl.clientWidth);
+    const height = Math.max(1, areaEl.clientHeight);
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    // Fondo
+    ctx.fillStyle = hexToRgba(backgroundColor, backgroundOpacity);
+    ctx.fillRect(0, 0, width, height);
+
+    // Precargar imágenes
+    const imgEls = canvasElements.filter((e) => e.type === 'image' && e.src) as (CanvasElement & { src: string })[];
+    const imgMap = new Map<number, HTMLImageElement>();
+    await Promise.all(
+      imgEls.map(async (el) => {
+        try {
+          const img = await loadImage(el.src);
+          imgMap.set(el.id, img);
+        } catch (err) {
+          // Ignorar errores de carga individuales
+        }
+      })
+    );
+
+    // Dibujar elementos en orden de capas
+    for (const el of canvasElements) {
+      const x = el.x;
+      const y = el.y;
+      const w = el.width;
+      const h = el.height;
+      if (w <= 0 || h <= 0) continue;
+
+      if (el.type === 'image') {
+        ctx.save();
+        // Clip con borde redondeado
+        roundedRectPath(ctx, x, y, w, h, el.borderRadius);
+        ctx.clip();
+        // Filtros y opacidad
+        ctx.filter = buildCanvasFilter(el);
+        ctx.globalAlpha = Math.max(0, Math.min(100, el.opacity ?? 100)) / 100;
+        const img = imgMap.get(el.id);
+        if (img) {
+          const scale = el.imgScale ?? 1;
+          const dx = x + (el.imgOffsetX ?? 0);
+          const dy = y + (el.imgOffsetY ?? 0);
+          const dw = (el.imgNatW ?? img.naturalWidth) * scale;
+          const dh = (el.imgNatH ?? img.naturalHeight) * scale;
+          ctx.drawImage(img, dx, dy, dw, dh);
+        }
+        ctx.restore();
+        // Borde
+        const bw = el.borderWidth ?? 0;
+        if (bw > 0) {
+          ctx.save();
+          roundedRectPath(ctx, x, y, w, h, el.borderRadius);
+          ctx.strokeStyle = el.borderColor ?? '#e2e8f0';
+          ctx.lineWidth = bw;
+          if (el.borderStyle === 'dashed') ctx.setLineDash([6, 4]); else ctx.setLineDash([]);
+          ctx.stroke();
+          ctx.restore();
+        }
+        // Reset filtros
+        ctx.filter = 'none';
+        ctx.globalAlpha = 1;
+        continue;
+      }
+
+      if (el.type === 'text') {
+        // Fondo del texto (caja)
+        const bg = el.backgroundColor ?? 'transparent';
+        if (bg !== 'transparent') {
+          ctx.save();
+          roundedRectPath(ctx, x, y, w, h, el.borderRadius);
+          ctx.fillStyle = bg;
+          ctx.fill();
+          ctx.restore();
+        }
+        // Borde
+        const bw = el.borderWidth ?? 0;
+        if (bw > 0) {
+          ctx.save();
+          roundedRectPath(ctx, x, y, w, h, el.borderRadius);
+          ctx.strokeStyle = el.borderColor ?? '#e2e8f0';
+          ctx.lineWidth = bw;
+          if (el.borderStyle === 'dashed') ctx.setLineDash([6, 4]); else ctx.setLineDash([]);
+          ctx.stroke();
+          ctx.restore();
+        }
+        // Texto centrado
+        const fontSize = el.fontSize ?? 24;
+        const fontFamily = el.fontFamily ?? 'Inter, system-ui, sans-serif';
+        const fontWeight = el.fontWeight ?? 'normal';
+        const fontStyle = el.fontStyle ?? 'normal';
+        ctx.fillStyle = el.color ?? '#333333';
+        // Alineación horizontal
+        const align = el.textAlign ?? 'center';
+        let drawX = x + w / 2;
+        if (align === 'left' || align === 'justify') { ctx.textAlign = 'left'; drawX = x + 8; }
+        else if (align === 'right') { ctx.textAlign = 'right'; drawX = x + w - 8; }
+        else { ctx.textAlign = 'center'; drawX = x + w / 2; }
+        ctx.textBaseline = 'middle';
+        ctx.font = `${fontStyle} ${fontWeight} ${fontSize}px ${fontFamily}`;
+        const lines = (el.content ?? '').split(/\n/);
+        const lineHeight = Math.round(fontSize * 1.2);
+        const totalHeight = lines.length * lineHeight;
+        let startY = y + h / 2 - totalHeight / 2 + lineHeight / 2;
+        for (const line of lines) {
+          ctx.fillText(line, drawX, startY);
+          startY += lineHeight;
+        }
+        continue;
+      }
+
+      if (el.type === 'shape') {
+        ctx.save();
+        const fill = el.backgroundColor || '#60a5fa';
+        const stroke = el.borderColor || 'transparent';
+        const bw = el.borderWidth || 0;
+        const dashed = el.borderStyle === 'dashed';
+        if (el.shapeKind === 'circle') {
+          ctx.beginPath();
+          ctx.ellipse(x + w / 2, y + h / 2, w / 2, h / 2, 0, 0, Math.PI * 2);
+          ctx.fillStyle = fill;
+          ctx.fill();
+          if (bw > 0) {
+            ctx.strokeStyle = stroke;
+            ctx.lineWidth = bw;
+            if (dashed) ctx.setLineDash([6, 4]); else ctx.setLineDash([]);
+            ctx.stroke();
+          }
+        } else if (el.shapeKind === 'triangle') {
+          drawTrianglePath(ctx, x, y, w, h);
+          ctx.fillStyle = fill;
+          ctx.fill();
+          if (bw > 0) {
+            ctx.strokeStyle = stroke;
+            ctx.lineWidth = bw;
+            if (dashed) ctx.setLineDash([6, 4]); else ctx.setLineDash([]);
+            ctx.stroke();
+          }
+        } else if (el.shapeKind === 'arrow') {
+          drawArrowPath(ctx, x, y, w, h);
+          ctx.fillStyle = fill;
+          ctx.fill();
+          if (bw > 0) {
+            ctx.strokeStyle = stroke;
+            ctx.lineWidth = bw;
+            if (dashed) ctx.setLineDash([6, 4]); else ctx.setLineDash([]);
+            ctx.stroke();
+          }
+        } else {
+          // rectangle/square y fallback
+          roundedRectPath(ctx, x, y, w, h, el.shapeKind === 'rectangle' ? (el.borderRadius ?? 0) : 0);
+          ctx.fillStyle = fill;
+          ctx.fill();
+          if (bw > 0) {
+            ctx.strokeStyle = stroke;
+            ctx.lineWidth = bw;
+            if (dashed) ctx.setLineDash([6, 4]); else ctx.setLineDash([]);
+            ctx.stroke();
+          }
+        }
+        ctx.restore();
+        continue;
+      }
+    }
+
+    // Descargar PNG
+    canvas.toBlob((blob) => {
+      if (!blob) return;
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'clipo-export.png';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    });
+  };
+
+  const handlePresent = async () => {
+    const area = canvasAreaRef.current;
+    const cw = Math.max(1, area?.clientWidth ?? 0);
+    const ch = Math.max(1, area?.clientHeight ?? 0);
+    const scale = Math.min(window.innerWidth / cw, window.innerHeight / ch);
+    setPresenting({ active: true, cw, ch, scale: isFinite(scale) && scale > 0 ? scale : 1 });
+    const el: any = appRootRef.current || document.documentElement;
+    try {
+      if (!document.fullscreenElement) {
+        if (el.requestFullscreen) {
+          await el.requestFullscreen();
+        } else if (el.webkitRequestFullscreen) {
+          await el.webkitRequestFullscreen();
+        }
+      }
+    } catch (_) {
+      // Ignorar errores de fullscreen
+    }
+  };
+
+  const handleExitPresent = async () => {
+    setPresenting((p) => ({ ...p, active: false }));
+    try {
+      if (document.fullscreenElement && document.exitFullscreen) {
+        await document.exitFullscreen();
+      }
+    } catch {}
+  };
+
+  useEffect(() => {
+    if (!presenting.active) return;
+    const onResize = () => {
+      setPresenting((p) => {
+        const cw = p.cw || (canvasAreaRef.current?.clientWidth ?? 1);
+        const ch = p.ch || (canvasAreaRef.current?.clientHeight ?? 1);
+        const scale = Math.min(window.innerWidth / cw, window.innerHeight / ch);
+        return { ...p, scale: isFinite(scale) && scale > 0 ? scale : 1 };
+      });
+    };
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, [presenting.active]);
   const handleAddShape = () => {
     const nextShapeIndex = canvasElements.filter((el) => el.type === 'shape').length + 1;
     const defaultWidth = 200;
@@ -116,7 +437,7 @@ function App() {
     initialHeight: number;
     initialLeft?: number;
     initialTop?: number;
-    resizeCorner?: 'nw' | 'ne' | 'sw' | 'se' | null;
+    resizeCorner?: 'nw' | 'ne' | 'sw' | 'se' | 'n' | 's' | 'e' | 'w' | null;
   }>({
     type: null,
     elementId: null,
@@ -160,11 +481,43 @@ function App() {
     return () => window.removeEventListener('mouseup', handleWindowMouseUp);
   }, []);
 
-  // Borrar elemento seleccionado con la tecla Supr (Delete)
+  // Borrar elemento seleccionado con la tecla Supr (Delete) y atajos de zoom
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
-      // Selección con tecla V
+      // Atajos de zoom (Ctrl + / Ctrl - / Ctrl 0)
+      if (e.ctrlKey) {
+        if (e.key === '+' || e.key === '=') {
+          e.preventDefault();
+          setZoom((z) => clampZoom(z * 1.1));
+          return;
+        }
+        if (e.key === '-' || e.key === '_') {
+          e.preventDefault();
+          setZoom((z) => clampZoom(z / 1.1));
+          return;
+        }
+        if (e.key === '0') {
+          e.preventDefault();
+          setZoom(1);
+          return;
+        }
+      }
+      // Modo presentación: Esc para salir y bloquear otros atajos
+      if (presenting.active) {
+        if (e.key === 'Escape') {
+          e.preventDefault();
+          try {
+            if (document.fullscreenElement && document.exitFullscreen) {
+              document.exitFullscreen();
+            }
+          } catch {}
+          setPresenting((p) => ({ ...p, active: false }));
+        }
+        return;
+      }
+      // Selección con tecla V (ignorar si se está editando texto)
       if (e.key.toLowerCase() === 'v') {
+        if (editingTextId !== null) return; // no interceptar mientras se escribe
         e.preventDefault();
         setCurrentTool('select');
         // Recoger paneles/desplegables
@@ -199,7 +552,7 @@ function App() {
 
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [selectedElementId, editingTextId, canvasElements]);
+  }, [selectedElementId, editingTextId, canvasElements, presenting.active]);
 
   // Recalcular posición de paneles (imagen/texto/fondo) centrados respecto al lienzo, sobre su borde superior
   useEffect(() => {
@@ -221,29 +574,37 @@ function App() {
   
   const canvasAreaRef = useRef<HTMLDivElement | null>(null);
   const canvasRef = useRef<HTMLDivElement | null>(null);
+  const appRootRef = useRef<HTMLDivElement | null>(null);
   const [imagePanelPos, setImagePanelPos] = useState<{ top: number; left: number }>({ top: 0, left: 0 });
 
   const handleAddText = () => {
     const nextTextIndex = canvasElements.filter((el) => el.type === 'text').length + 1;
     const defaultWidth = 200;
     const defaultHeight = 60;
-    const cw = canvasAreaRef.current?.clientWidth ?? 0;
-    const ch = canvasAreaRef.current?.clientHeight ?? 0;
-    const centerX = Math.max(0, Math.round((cw - defaultWidth) / 2));
-    const centerY = Math.max(0, Math.round((ch - defaultHeight) / 2));
+    // Calcular centro real del área de contenido descontando el padding
+    const el = canvasAreaRef.current;
+    const cs = el ? getComputedStyle(el) : null;
+    const padX = cs ? parseFloat(cs.paddingLeft) + parseFloat(cs.paddingRight) : 0;
+    const padY = cs ? parseFloat(cs.paddingTop) + parseFloat(cs.paddingBottom) : 0;
+    const cw = (el?.clientWidth ?? 0) - padX;
+    const ch = (el?.clientHeight ?? 0) - padY;
+    const centerX = Math.max(0, Math.round(cw / 2));
+    const centerY = Math.max(0, Math.round(ch / 2));
 
     const newText: CanvasElement = {
       id: Date.now(),
       type: 'text',
       name: `texto${nextTextIndex}`,
       content: 'Haz doble clic para editar',
-      x: centerX,
-      y: centerY,
+      // Posicionar de modo que el centro del cuadro coincida con el centro del lienzo
+      x: Math.max(0, centerX - Math.round(defaultWidth / 2)),
+      y: Math.max(0, centerY - Math.round(defaultHeight / 2)),
       fontSize: 24,
       color: '#333333',
       fontFamily: 'Inter, system-ui, sans-serif',
       fontWeight: 'normal',
       fontStyle: 'normal',
+      textAlign: 'center',
       borderRadius: 0,
       borderWidth: 1,
       borderColor: '#e2e8f0',
@@ -273,18 +634,14 @@ function App() {
             const img = new window.Image();
             img.onload = () => {
               const nextImageIndex = canvasElements.filter((el) => el.type === 'image').length + 1;
-              const maxW = 400;
-              const maxH = 300;
-              let w = img.naturalWidth || 200;
-              let h = img.naturalHeight || 150;
-              const scale = Math.min(maxW / w, maxH / h, 1);
-              w = Math.max(20, Math.round(w * scale));
-              h = Math.max(20, Math.round(h * scale));
+              // Usar tamaño original de la imagen
+              const w = Math.max(1, img.naturalWidth || 200);
+              const h = Math.max(1, img.naturalHeight || 150);
 
-              const cw = canvasAreaRef.current?.clientWidth ?? 0;
-              const ch = canvasAreaRef.current?.clientHeight ?? 0;
-              const centerX = Math.max(0, Math.round((cw - w) / 2));
-              const centerY = Math.max(0, Math.round((ch - h) / 2));
+              const cw2 = canvasAreaRef.current?.clientWidth ?? 0;
+              const ch2 = canvasAreaRef.current?.clientHeight ?? 0;
+              const centerX = Math.max(0, Math.round((cw2 - w) / 2));
+              const centerY = Math.max(0, Math.round((ch2 - h) / 2));
 
               const newImage: CanvasElement = {
                 id: Date.now(),
@@ -309,9 +666,18 @@ function App() {
                 blur: 0,
                 width: w,
                 height: h,
+                imgScale: 1,
+                imgOffsetX: 0,
+                imgOffsetY: 0,
+                imgNatW: img.naturalWidth || w,
+                imgNatH: img.naturalHeight || h,
               };
               setCanvasElements((prev) => [...prev, newImage]);
-              setSelectedElementId(newImage.id);
+              // Forzar selección en el siguiente frame para asegurar layout correcto del bounding box
+              requestAnimationFrame(() => {
+                setSelectedElementId(newImage.id);
+                setSelectedElementIds([newImage.id]);
+              });
               setShowElementPanel(true);
               setShowBackgroundPanel(false);
             };
@@ -325,7 +691,7 @@ function App() {
   };
 
   return (
-    <div className="h-screen w-screen flex bg-gray-50 overflow-hidden">
+    <div ref={appRootRef} className="h-screen w-screen flex bg-gray-50 overflow-hidden">
       {/* Left Sidebar Toolbar */}
       <div className="w-[15%] min-w-[200px] h-full bg-gradient-to-b from-slate-50 to-slate-100 border-r border-slate-200 shadow-lg">
         <div className="p-6 h-full flex flex-col">
@@ -393,15 +759,7 @@ function App() {
             </div>
           </div>
 
-          {/* Bottom Actions */}
-          <div className="mt-auto space-y-3">
-            <button className="w-full bg-white hover:bg-slate-50 text-slate-700 px-4 py-2 rounded-lg border border-slate-200 font-medium transition-colors duration-200">
-              Guardar Proyecto
-            </button>
-            <button className="w-full bg-slate-800 hover:bg-slate-900 text-white px-4 py-2 rounded-lg font-medium transition-colors duration-200">
-              Exportar
-            </button>
-          </div>
+          {/* Bottom Actions removed (Exportar moved to top-right only) */}
         </div>
       </div>
 
@@ -509,36 +867,6 @@ function App() {
                   </button>
                   <div className="flex items-center space-x-1">
                     <button
-                      className="text-xs px-2 py-1 rounded border border-slate-300"
-                      title="Subir una posición"
-                      onClick={() => {
-                        setCanvasElements((prev) => {
-                          const list = [...prev];
-                          const from = list.findIndex((x) => x.id === el.id);
-                          const to = Math.min(list.length - 1, from + 1);
-                          if (from === -1 || from === to) return prev;
-                          const [item] = list.splice(from, 1);
-                          list.splice(to, 0, item);
-                          return list;
-                        });
-                      }}
-                    >▲</button>
-                    <button
-                      className="text-xs px-2 py-1 rounded border border-slate-300"
-                      title="Bajar una posición"
-                      onClick={() => {
-                        setCanvasElements((prev) => {
-                          const list = [...prev];
-                          const from = list.findIndex((x) => x.id === el.id);
-                          const to = Math.max(0, from - 1);
-                          if (from === -1 || from === to) return prev;
-                          const [item] = list.splice(from, 1);
-                          list.splice(to, 0, item);
-                          return list;
-                        });
-                      }}
-                    >▼</button>
-                    <button
                       className={`text-xs px-2 py-1 rounded border border-slate-300 cursor-grab active:cursor-grabbing ${dragLayerId === el.id ? 'bg-slate-200' : ''}`}
                       title="Arrastrar para reordenar"
                       draggable
@@ -557,6 +885,17 @@ function App() {
                     >
                       {el.locked ? <Lock className="w-3 h-3" /> : <Unlock className="w-3 h-3" />}
                     </button>
+                    <button
+                      className="text-xs px-2 py-1 rounded border border-red-300 text-red-600 hover:bg-red-50"
+                      title="Eliminar capa"
+                      onClick={() => {
+                        setCanvasElements((prev) => prev.filter((x) => x.id !== el.id));
+                        setSelectedElementId((id) => (id === el.id ? null : id));
+                        setSelectedElementIds((ids) => ids.filter((id) => id !== el.id));
+                      }}
+                    >
+                      <Trash2 className="w-3 h-3" />
+                    </button>
                   </div>
                 </div>
               ))}
@@ -566,7 +905,30 @@ function App() {
         {/* Top Toolbar */}
         <div className="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-6 shadow-sm w-full">
           <div className="flex items-center space-x-4">
-            <h1 className="text-lg font-semibold text-slate-800">Presentación sin título</h1>
+            {editingProjectName ? (
+              <input
+                className="text-lg font-semibold text-slate-800 bg-transparent border-b border-blue-300 focus:outline-none focus:border-blue-500"
+                value={projectName}
+                onChange={(e) => setProjectName(e.target.value)}
+                autoFocus
+                onBlur={() => setEditingProjectName(false)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    (e.currentTarget as HTMLInputElement).blur();
+                  } else if (e.key === 'Escape') {
+                    setEditingProjectName(false);
+                  }
+                }}
+              />
+            ) : (
+              <h1
+                className="text-lg font-semibold text-slate-800"
+                onDoubleClick={() => setEditingProjectName(true)}
+                title="Doble clic para renombrar"
+              >
+                {projectName}
+              </h1>
+            )}
             <div className="flex items-center space-x-2 text-sm text-slate-500">
               <div className="w-2 h-2 bg-green-500 rounded-full"></div>
               <span>Guardado automáticamente</span>
@@ -574,54 +936,105 @@ function App() {
           </div>
           
           <div className="flex items-center space-x-3">
-            <button className="px-4 py-2 text-slate-600 hover:text-slate-800 font-medium transition-colors duration-200">
-              Vista previa
-            </button>
-            <button className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors duration-200">
+            {/* Vista previa button removed */}
+            <button onClick={handlePresent} className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors duration-200">
               Presentar
+            </button>
+            <button
+              onClick={handleExport}
+              className="px-6 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-medium transition-colors duration-200"
+            >
+              Exportar
             </button>
           </div>
         </div>
 
         {/* Canvas Container */}
         <div className="h-[calc(100vh-4rem)] flex items-center justify-center p-8 bg-gradient-to-br from-slate-50 to-slate-100"
+        onWheel={(e) => {
+          if (e.ctrlKey) {
+            e.preventDefault();
+            const dir = e.deltaY < 0 ? 1 : -1;
+            setZoom((z) => clampZoom(z * (dir > 0 ? 1.1 : 1 / 1.1)));
+          }
+        }}
         onMouseMove={(e) => {
           // Actualizar rectángulo de selección (marquee)
           if (marquee.active) {
             setMarquee((m) => ({ ...m, currentX: e.clientX, currentY: e.clientY }));
-            const contentRect = canvasAreaRef.current?.getBoundingClientRect();
-            if (contentRect) {
-              const x1 = Math.min(marquee.startX, e.clientX);
-              const y1 = Math.min(marquee.startY, e.clientY);
-              const x2 = Math.max(marquee.startX, e.clientX);
-              const y2 = Math.max(marquee.startY, e.clientY);
-              const ids: number[] = [];
-              for (const el of canvasElements) {
-                const elLeft = contentRect.left + el.x;
-                const elTop = contentRect.top + el.y;
-                const elRight = elLeft + el.width;
-                const elBottom = elTop + el.height;
-                if (elRight > x1 && elLeft < x2 && elBottom > y1 && elTop < y2) {
-                  ids.push(el.id);
+              const areaEl = canvasAreaRef.current;
+              const contentRect = areaEl?.getBoundingClientRect();
+              if (contentRect) {
+              const cs = areaEl ? getComputedStyle(areaEl) : null;
+              const padL = cs ? parseFloat(cs.paddingLeft) : 0;
+              const padT = cs ? parseFloat(cs.paddingTop) : 0;
+                const x1 = Math.min(marquee.startX, e.clientX);
+                const y1 = Math.min(marquee.startY, e.clientY);
+                const x2 = Math.max(marquee.startX, e.clientX);
+                const y2 = Math.max(marquee.startY, e.clientY);
+                const ids: number[] = [];
+                for (const el of canvasElements) {
+                const elLeft = contentRect.left + padL + el.x * zoom;
+                const elTop = contentRect.top + padT + el.y * zoom;
+                const elRight = elLeft + el.width * zoom;
+                const elBottom = elTop + el.height * zoom;
+                  if (elRight > x1 && elLeft < x2 && elBottom > y1 && elTop < y2) {
+                    ids.push(el.id);
+                  }
                 }
+                setSelectedElementIds(ids);
               }
-              setSelectedElementIds(ids);
-            }
             return;
           }
           // Solo mover/redimensionar mientras el botón izquierdo está presionado
           if ((e.buttons & 1) !== 1) return;
 
           if (action.type === 'moving' && action.elementId) {
-            const newX = e.clientX - action.initialX;
-            const newY = e.clientY - action.initialY;
+            const deltaXScreen = e.clientX - action.initialX;
+            const deltaYScreen = e.clientY - action.initialY;
+            const newX = (action.initialLeft ?? 0) + deltaXScreen / zoom;
+            const newY = (action.initialTop ?? 0) + deltaYScreen / zoom;
+            // Actualizar guías de alineación (centro con lienzo y otros elementos)
+            const areaEl = canvasAreaRef.current;
+            const contentRect = areaEl?.getBoundingClientRect();
+            if (contentRect) {
+              const cs = areaEl ? getComputedStyle(areaEl) : null;
+              const padL = cs ? parseFloat(cs.paddingLeft) : 0;
+              const padT = cs ? parseFloat(cs.paddingTop) : 0;
+              const movingEl = canvasElements.find((x) => x.id === action.elementId);
+              const w = movingEl?.width ?? action.initialWidth;
+              const h = movingEl?.height ?? action.initialHeight;
+              const centerX = contentRect.left + padL + (newX + w / 2) * zoom;
+              const centerY = contentRect.top + padT + (newY + h / 2) * zoom;
+              const tol = 4; // tolerancia en px
+              const v: number[] = [];
+              const hLines: number[] = [];
+              // Centro del lienzo
+              const canvasCenterX = contentRect.left + contentRect.width / 2;
+              const canvasCenterY = contentRect.top + contentRect.height / 2;
+              if (Math.abs(centerX - canvasCenterX) <= tol) v.push(canvasCenterX);
+              if (Math.abs(centerY - canvasCenterY) <= tol) hLines.push(canvasCenterY);
+              // Centros de otros elementos
+              for (const el of canvasElements) {
+                if (el.id === action.elementId) continue;
+                const elCenterX = contentRect.left + padL + (el.x + el.width / 2) * zoom;
+                const elCenterY = contentRect.top + padT + (el.y + el.height / 2) * zoom;
+                if (Math.abs(centerX - elCenterX) <= tol) v.push(elCenterX);
+                if (Math.abs(centerY - elCenterY) <= tol) hLines.push(elCenterY);
+              }
+              // Quitar duplicados aproximando a entero para estabilidad visual
+              const uniq = (arr: number[]) => Array.from(new Set(arr.map((n) => Math.round(n))));
+              setGuideOverlay({
+                v: uniq(v),
+                h: uniq(hLines),
+                bounds: { left: contentRect.left, top: contentRect.top, width: contentRect.width, height: contentRect.height },
+              });
+            }
 
-            setCanvasElements((prev) =>
-              prev.map((el) => (el.id === action.elementId ? { ...el, x: newX, y: newY } : el))
-            );
+            setCanvasElements((prev) => prev.map((el) => (el.id === action.elementId ? { ...el, x: newX, y: newY } : el)));
           } else if (action.type === 'resizing' && action.elementId && action.resizeCorner) {
-            const deltaX = e.clientX - action.initialX;
-            const deltaY = e.clientY - action.initialY;
+            const deltaX = (e.clientX - action.initialX) / zoom;
+            const deltaY = (e.clientY - action.initialY) / zoom;
             const minSize = 20;
 
             const initialLeft = action.initialLeft ?? 0;
@@ -649,14 +1062,34 @@ function App() {
                 rawWidth = action.initialWidth - deltaX;
                 rawHeight = action.initialHeight - deltaY;
                 break;
+              case 'e':
+                rawWidth = action.initialWidth + deltaX;
+                rawHeight = action.initialHeight;
+                break;
+              case 'w':
+                rawWidth = action.initialWidth - deltaX;
+                rawHeight = action.initialHeight;
+                break;
+              case 's':
+                rawWidth = action.initialWidth;
+                rawHeight = action.initialHeight + deltaY;
+                break;
+              case 'n':
+                rawWidth = action.initialWidth;
+                rawHeight = action.initialHeight - deltaY;
+                break;
             }
 
-            // Apply min size and optional proportional scaling (Alt)
+            // Apply min size and proportional scaling
             const aspect = action.initialHeight > 0 ? action.initialWidth / action.initialHeight : 1;
             let newWidth = Math.max(minSize, rawWidth);
             let newHeight = Math.max(minSize, rawHeight);
 
-            if (e.altKey) {
+            // Mantener proporción por defecto para imágenes al usar esquinas; Alt mantiene proporción para otros
+            const targetEl = canvasElements.find((x) => x.id === action.elementId);
+            const isCorner = ['se', 'ne', 'sw', 'nw'].includes(action.resizeCorner);
+            const proportional = (targetEl?.type === 'image' && isCorner) || e.altKey;
+            if (proportional) {
               const widthChange = Math.abs(rawWidth - action.initialWidth);
               const heightChange = Math.abs(rawHeight - action.initialHeight);
               if (widthChange >= heightChange) {
@@ -688,14 +1121,106 @@ function App() {
                 newLeft = right - newWidth;
                 newTop = bottom - newHeight;
                 break;
+              case 'e':
+                newLeft = initialLeft;
+                newTop = initialTop;
+                break;
+              case 'w':
+                newLeft = right - newWidth;
+                newTop = initialTop;
+                break;
+              case 's':
+                newLeft = initialLeft;
+                newTop = initialTop;
+                break;
+              case 'n':
+                newLeft = initialLeft;
+                newTop = bottom - newHeight;
+                break;
             }
 
+            // Para imágenes, si recortamos desde el lado izquierdo o superior,
+            // ajustamos el offset interno para que la imagen no se desplace visualmente
+            const deltaLeftChange = newLeft - initialLeft;
+            const deltaTopChange = newTop - initialTop;
+
             setCanvasElements((prev) =>
-              prev.map((el) =>
-                el.id === action.elementId
-                  ? { ...el, x: newLeft, y: newTop, width: newWidth, height: newHeight }
-                  : el
-              )
+              prev.map((el) => {
+                if (el.id !== action.elementId) return el;
+                if (el.type === 'image') {
+                  let imgOffsetX = el.imgOffsetX ?? 0;
+                  let imgOffsetY = el.imgOffsetY ?? 0;
+                  if (action.resizeCorner === 'w') {
+                    imgOffsetX = (el.imgOffsetX ?? 0) - deltaLeftChange;
+                  }
+                  if (action.resizeCorner === 'n') {
+                    imgOffsetY = (el.imgOffsetY ?? 0) - deltaTopChange;
+                  }
+
+                  // Asegurar que no queden huecos: la imagen debe cubrir el contenedor
+                  const scale = el.imgScale ?? 1;
+                  const natW = el.imgNatW ?? el.width;
+                  const natH = el.imgNatH ?? el.height;
+                  const imgW = natW * scale;
+                  const imgH = natH * scale;
+
+                  let adjLeft = newLeft;
+                  let adjTop = newTop;
+                  let adjWidth = newWidth;
+                  let adjHeight = newHeight;
+
+                  const isSideHandle = ['e', 'w', 'n', 's'].includes(action.resizeCorner);
+                  if (isSideHandle) {
+                    // Limitar tamaño para que no exceda el tamaño visible de la imagen con el offset actual
+                    // Calcular límites de offset válidos para cubrir el contenedor [min, max]
+                    const minOffX = Math.min(0, adjWidth - imgW);
+                    const maxOffX = 0;
+                    const minOffY = Math.min(0, adjHeight - imgH);
+                    const maxOffY = 0;
+
+                    // Si el contenedor es mayor que la imagen, reducir el contenedor según el lado activo
+                    if (imgW < adjWidth) {
+                      if (action.resizeCorner === 'e') {
+                        adjWidth = imgW;
+                      } else if (action.resizeCorner === 'w') {
+                        adjLeft = right - imgW;
+                        adjWidth = imgW;
+                      }
+                    }
+                    if (imgH < adjHeight) {
+                      if (action.resizeCorner === 's') {
+                        adjHeight = imgH;
+                      } else if (action.resizeCorner === 'n') {
+                        adjTop = bottom - imgH;
+                        adjHeight = imgH;
+                      }
+                    }
+
+                    // Recalcular límites de offset tras posibles ajustes
+                    const minOffX2 = Math.min(0, adjWidth - imgW);
+                    const minOffY2 = Math.min(0, adjHeight - imgH);
+                    imgOffsetX = Math.max(minOffX2, Math.min(maxOffX, imgOffsetX));
+                    imgOffsetY = Math.max(minOffY2, Math.min(maxOffY, imgOffsetY));
+                  } else {
+                    // Para esquinas: clamp offset para evitar huecos si los hubiera
+                    const minOffX = Math.min(0, adjWidth - imgW);
+                    const minOffY = Math.min(0, adjHeight - imgH);
+                    imgOffsetX = Math.max(minOffX, Math.min(0, imgOffsetX));
+                    imgOffsetY = Math.max(minOffY, Math.min(0, imgOffsetY));
+                  }
+
+                  return {
+                    ...el,
+                    x: adjLeft,
+                    y: adjTop,
+                    width: adjWidth,
+                    height: adjHeight,
+                    imgOffsetX,
+                    imgOffsetY,
+                  };
+                }
+                return { ...el, x: newLeft, y: newTop, width: newWidth, height: newHeight };
+              })
             );
           }
         }}
@@ -708,6 +1233,8 @@ function App() {
               setSelectedElementId(null);
             }
           }
+          // Limpiar guías al soltar
+          setGuideOverlay({ v: [], h: [], bounds: null });
           setAction({
             type: null,
             elementId: null,
@@ -721,6 +1248,8 @@ function App() {
           if (marquee.active) {
             setMarquee({ active: false, startX: 0, startY: 0, currentX: 0, currentY: 0 });
           }
+          // Limpiar guías al salir
+          setGuideOverlay({ v: [], h: [], bounds: null });
           setAction({
             type: null,
             elementId: null,
@@ -733,7 +1262,7 @@ function App() {
         
           {/* Interactive Canvas Zone */}
           <div
-            className="relative w-[60%] h-[70%] bg-white shadow-2xl border-2 border-dashed border-slate-300 hover:border-blue-400 transition-all duration-300 cursor-pointer group overflow-hidden"
+            className="relative w-[60%] h-[70%] bg-white shadow-2xl border-2 border-dashed border-slate-300 hover:border-blue-400 transition-all duration-300 cursor-default group overflow-hidden"
             style={{ backgroundColor: hexToRgba(backgroundColor, backgroundOpacity) }}
             ref={canvasRef}
           >
@@ -750,7 +1279,22 @@ function App() {
             <div
               className="relative w-full h-full p-8"
               ref={canvasAreaRef}
+              onMouseDown={(e) => {
+                // Iniciar selección por arrastre (marquee) solo con herramienta de selección
+                if (currentTool !== 'select') return;
+                setMarquee({
+                  active: true,
+                  startX: e.clientX,
+                  startY: e.clientY,
+                  currentX: e.clientX,
+                  currentY: e.clientY,
+                });
+                // Limpiar selección anterior
+                setSelectedElementIds([]);
+                setSelectedElementId(null);
+              }}
               onClick={() => {
+                // Evitar abrir el panel de fondo inmediatamente después de una selección múltiple
                 setSelectedElementId(null);
                 setShowEffectDropdown(false);
                 setShowCornersOptions(false);
@@ -759,7 +1303,7 @@ function App() {
                 setShowImageFiltersOptions(false);
                 setShowImageOpacityOptions(false);
                 setShowElementPanel(false);
-                if (!backgroundLocked) setShowBackgroundPanel(true);
+                if (!backgroundLocked && selectedElementIds.length === 0) setShowBackgroundPanel(true);
               }}
             >
               {canvasElements.length === 0 ? (
@@ -853,7 +1397,7 @@ function App() {
                   )}
                 </div>
               ) : (
-                <div className="relative w-full h-full">
+                <div className="relative w-full h-full" style={{ transform: `scale(${zoom})`, transformOrigin: 'top left' }}>
                   {canvasElements.map((element, idx) => (
                     <div
                       key={element.id}
@@ -896,23 +1440,27 @@ function App() {
                           setAction({
                             type: 'moving',
                             elementId: cloneId,
-                            initialX: e.clientX - (clone.x ?? 0),
-                            initialY: e.clientY - (clone.y ?? 0),
+                            initialX: e.clientX,
+                            initialY: e.clientY,
                             initialWidth: clone.width || 0,
                             initialHeight: clone.height || 0,
+                            initialLeft: clone.x,
+                            initialTop: clone.y,
                           });
                           return;
                         }
 
-                        // Comportamiento normal: mover el elemento original
-                        setAction({
-                          type: 'moving',
-                          elementId: element.id,
-                          initialX: e.clientX - element.x,
-                          initialY: e.clientY - element.y,
-                          initialWidth: element.width || 0,
-                          initialHeight: element.height || 0,
-                        });
+                      // Comportamiento normal: mover el elemento original (respetando zoom)
+                      setAction({
+                        type: 'moving',
+                        elementId: element.id,
+                        initialX: e.clientX,
+                        initialY: e.clientY,
+                        initialWidth: element.width || 0,
+                        initialHeight: element.height || 0,
+                        initialLeft: element.x,
+                        initialTop: element.y,
+                      });
                       }}
                       onClick={(e) => {
                         e.stopPropagation();
@@ -976,13 +1524,14 @@ function App() {
                                   sel?.addRange(range);
                                 }
                               }}
-                              className="outline-none w-full text-center"
+                              className="outline-none w-full whitespace-pre-wrap"
                               style={{
                                 fontFamily: element.fontFamily,
                                 fontWeight: element.fontWeight,
                                 fontStyle: element.fontStyle,
                                 fontSize: element.fontSize,
                                 color: element.color,
+                                textAlign: (element.textAlign as any) || 'center',
                               }}
                               onMouseDown={(e) => e.stopPropagation()}
                               onClick={(e) => e.stopPropagation()}
@@ -1003,14 +1552,14 @@ function App() {
                               {element.content}
                             </div>
                           ) : (
-                            <span className="truncate w-full text-center" title={element.content} style={{ color: element.color }}>
+                            <div className="w-full whitespace-pre-wrap" title={element.content} style={{ color: element.color, textAlign: (element.textAlign as any) || 'center' }}>
                               {element.content}
-                            </span>
+                            </div>
                           )}
                         </div>
                       ) : element.type === 'image' ? (
                         <div
-                          className="w-full h-full shadow-md"
+                          className="w-full h-full shadow-md relative"
                           style={{
                             borderRadius: `${element.borderRadius ?? 0}%`,
                             borderWidth: (element.borderWidth ?? 0) + 'px',
@@ -1023,8 +1572,12 @@ function App() {
                           <img
                             src={element.src}
                             alt="Canvas element"
-                            className="w-full h-full block"
+                            className="block absolute"
                             style={{
+                              left: `${element.imgOffsetX ?? 0}px`,
+                              top: `${element.imgOffsetY ?? 0}px`,
+                              transform: `scale(${element.imgScale ?? 1})`,
+                              transformOrigin: 'top left',
                               filter: `brightness(${element.brightness ?? 100}%) contrast(${element.contrast ?? 100}%) saturate(${element.saturate ?? 100}%) hue-rotate(${element.hueRotate ?? 0}deg) grayscale(${element.grayscale ?? 0}%) sepia(${element.sepia ?? 0}%) blur(${element.blur ?? 0}px)`,
                               opacity: Math.max(0, Math.min(100, element.opacity ?? 100)) / 100,
                             }}
@@ -1082,9 +1635,11 @@ function App() {
 
                       {(selectedElementId === element.id || selectedElementIds.includes(element.id)) && (
                         <>
+                          {/* Selection frame */}
+                          <div className="pointer-events-none absolute inset-0 border-2 border-purple-500" />
                           {/* Esquinas de redimensionado */}
                           <div
-                            className="absolute -right-2 -bottom-2 w-4 h-4 bg-blue-600 border-2 border-white rounded-full cursor-se-resize"
+                            className="absolute -right-2 -bottom-2 w-3.5 h-3.5 bg-white border-2 border-purple-500 rounded-full cursor-se-resize shadow-sm"
                             onMouseDown={(e) => {
                               e.stopPropagation();
                               e.preventDefault();
@@ -1102,7 +1657,7 @@ function App() {
                             }}
                           />
                           <div
-                            className="absolute -left-2 -top-2 w-4 h-4 bg-blue-600 border-2 border-white rounded-full cursor-nwse-resize"
+                            className="absolute -left-2 -top-2 w-3.5 h-3.5 bg-white border-2 border-purple-500 rounded-full cursor-nwse-resize shadow-sm"
                             onMouseDown={(e) => {
                               e.stopPropagation();
                               e.preventDefault();
@@ -1120,7 +1675,7 @@ function App() {
                             }}
                           />
                           <div
-                            className="absolute -right-2 -top-2 w-4 h-4 bg-blue-600 border-2 border-white rounded-full cursor-nesw-resize"
+                            className="absolute -right-2 -top-2 w-3.5 h-3.5 bg-white border-2 border-purple-500 rounded-full cursor-nesw-resize shadow-sm"
                             onMouseDown={(e) => {
                               e.stopPropagation();
                               e.preventDefault();
@@ -1138,7 +1693,7 @@ function App() {
                             }}
                           />
                           <div
-                            className="absolute -left-2 -bottom-2 w-4 h-4 bg-blue-600 border-2 border-white rounded-full cursor-nesw-resize"
+                            className="absolute -left-2 -bottom-2 w-3.5 h-3.5 bg-white border-2 border-purple-500 rounded-full cursor-nesw-resize shadow-sm"
                             onMouseDown={(e) => {
                               e.stopPropagation();
                               e.preventDefault();
@@ -1155,6 +1710,87 @@ function App() {
                               });
                             }}
                           />
+                          {/* Side handles for single-side cropping (images y formas) */}
+                          {element.type !== 'text' && (
+                            <>
+                              {/* East */}
+                              <div
+                                className="absolute -right-2 top-1/2 -translate-y-1/2 w-2.5 h-6 bg-white border-2 border-purple-500 rounded-sm cursor-ew-resize shadow-sm"
+                                onMouseDown={(e) => {
+                                  e.stopPropagation();
+                                  e.preventDefault();
+                                  setAction({
+                                    type: 'resizing',
+                                    elementId: element.id,
+                                    initialX: e.clientX,
+                                    initialY: e.clientY,
+                                    initialWidth: element.width || 0,
+                                    initialHeight: element.height || 0,
+                                    initialLeft: element.x,
+                                    initialTop: element.y,
+                                    resizeCorner: 'e',
+                                  });
+                                }}
+                              />
+                              {/* West */}
+                              <div
+                                className="absolute -left-2 top-1/2 -translate-y-1/2 w-2.5 h-6 bg-white border-2 border-purple-500 rounded-sm cursor-ew-resize shadow-sm"
+                                onMouseDown={(e) => {
+                                  e.stopPropagation();
+                                  e.preventDefault();
+                                  setAction({
+                                    type: 'resizing',
+                                    elementId: element.id,
+                                    initialX: e.clientX,
+                                    initialY: e.clientY,
+                                    initialWidth: element.width || 0,
+                                    initialHeight: element.height || 0,
+                                    initialLeft: element.x,
+                                    initialTop: element.y,
+                                    resizeCorner: 'w',
+                                  });
+                                }}
+                              />
+                              {/* North */}
+                              <div
+                                className="absolute left-1/2 -translate-x-1/2 -top-2 w-6 h-2.5 bg-white border-2 border-purple-500 rounded-sm cursor-ns-resize shadow-sm"
+                                onMouseDown={(e) => {
+                                  e.stopPropagation();
+                                  e.preventDefault();
+                                  setAction({
+                                    type: 'resizing',
+                                    elementId: element.id,
+                                    initialX: e.clientX,
+                                    initialY: e.clientY,
+                                    initialWidth: element.width || 0,
+                                    initialHeight: element.height || 0,
+                                    initialLeft: element.x,
+                                    initialTop: element.y,
+                                    resizeCorner: 'n',
+                                  });
+                                }}
+                              />
+                              {/* South */}
+                              <div
+                                className="absolute left-1/2 -translate-x-1/2 -bottom-2 w-6 h-2.5 bg-white border-2 border-purple-500 rounded-sm cursor-ns-resize shadow-sm"
+                                onMouseDown={(e) => {
+                                  e.stopPropagation();
+                                  e.preventDefault();
+                                  setAction({
+                                    type: 'resizing',
+                                    elementId: element.id,
+                                    initialX: e.clientX,
+                                    initialY: e.clientY,
+                                    initialWidth: element.width || 0,
+                                    initialHeight: element.height || 0,
+                                    initialLeft: element.x,
+                                    initialTop: element.y,
+                                    resizeCorner: 's',
+                                  });
+                                }}
+                              />
+                            </>
+                          )}
                           <div className="relative">
                             <button
                               className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded-md text-sm shadow-md transition-colors duration-200"
@@ -1235,9 +1871,9 @@ function App() {
                               <div
                                 className="fixed bg-white border border-slate-200 rounded-md shadow-lg px-3 py-2 z-30 flex items-center space-x-3 text-black"
                                 style={{
-                                  top: `${imagePanelPos.top - 8}px`,
+                                  top: `${imagePanelPos.top}px`,
                                   left: `${imagePanelPos.left}px`,
-                                  transform: 'translate(-50%, -100%)',
+                                  transform: 'translate(-50%, 0%)',
                                   color: '#000',
                                   minWidth: '320px',
                                 }}
@@ -1716,9 +2352,9 @@ function App() {
                               <div
                                 className="fixed bg-white border border-slate-200 rounded-md shadow-lg p-3 z-30 flex items-center space-x-2 text-black"
                                 style={{
-                                  top: `${imagePanelPos.top - 8}px`,
+                                  top: `${imagePanelPos.top}px`,
                                   left: `${imagePanelPos.left}px`,
-                                  transform: 'translate(-50%, -100%)',
+                                  transform: 'translate(-50%, 0%)',
                                   color: '#000',
                                 }}
                                 onMouseDown={(e) => e.stopPropagation()}
@@ -1758,6 +2394,38 @@ function App() {
                                       }
                                     }}
                                     />
+                                </div>
+                                {/* Text alignment */}
+                                <div className="flex items-center space-x-1">
+                                  <label className="text-xs text-slate-600">Alineación</label>
+                                  <button
+                                    className={`p-2 border rounded ${element.textAlign === 'left' ? 'bg-slate-100 border-slate-400' : 'border-slate-300 hover:bg-slate-50'}`}
+                                    title="Alinear a la izquierda"
+                                    onClick={() => setCanvasElements((prev) => prev.map((el) => el.id === element.id ? { ...el, textAlign: 'left' } : el))}
+                                  >
+                                    <AlignLeft className="w-4 h-4" />
+                                  </button>
+                                  <button
+                                    className={`p-2 border rounded ${element.textAlign === 'center' || !element.textAlign ? 'bg-slate-100 border-slate-400' : 'border-slate-300 hover:bg-slate-50'}`}
+                                    title="Centrar"
+                                    onClick={() => setCanvasElements((prev) => prev.map((el) => el.id === element.id ? { ...el, textAlign: 'center' } : el))}
+                                  >
+                                    <AlignCenter className="w-4 h-4" />
+                                  </button>
+                                  <button
+                                    className={`p-2 border rounded ${element.textAlign === 'right' ? 'bg-slate-100 border-slate-400' : 'border-slate-300 hover:bg-slate-50'}`}
+                                    title="Alinear a la derecha"
+                                    onClick={() => setCanvasElements((prev) => prev.map((el) => el.id === element.id ? { ...el, textAlign: 'right' } : el))}
+                                  >
+                                    <AlignRight className="w-4 h-4" />
+                                  </button>
+                                  <button
+                                    className={`p-2 border rounded ${element.textAlign === 'justify' ? 'bg-slate-100 border-slate-400' : 'border-slate-300 hover:bg-slate-50'}`}
+                                    title="Justificar"
+                                    onClick={() => setCanvasElements((prev) => prev.map((el) => el.id === element.id ? { ...el, textAlign: 'justify' } : el))}
+                                  >
+                                    <AlignJustify className="w-4 h-4" />
+                                  </button>
                                 </div>
                                 {/* Text color */}
                                 <div className="flex items-center space-x-1">
@@ -1962,7 +2630,7 @@ function App() {
       {showBackgroundPanel && (
         <div
           className="fixed bg-white text-black border border-slate-200 rounded-md shadow-lg p-3 z-30 flex items-center space-x-3"
-          style={{ top: `${imagePanelPos.top - 8}px`, left: `${imagePanelPos.left}px`, transform: 'translate(-50%, -100%)' }}
+          style={{ top: `${imagePanelPos.top}px`, left: `${imagePanelPos.left}px`, transform: 'translate(-50%, 0%)' }}
           onMouseDown={(e) => e.stopPropagation()}
           onClick={(e) => e.stopPropagation()}
         >
@@ -2017,6 +2685,150 @@ function App() {
             height: `${Math.abs(marquee.currentY - marquee.startY)}px`,
           }}
         />
+      )}
+      {/* Alignment guides overlay */}
+      {guideOverlay.bounds && (
+        <>
+          {guideOverlay.v.map((x, i) => (
+            <div
+              key={`gv-${i}`}
+              className="fixed pointer-events-none z-50"
+              style={{ left: `${x}px`, top: `${guideOverlay.bounds.top}px`, width: '2px', height: `${guideOverlay.bounds.height}px`, background: 'rgba(244,63,94,0.9)' }}
+            />
+          ))}
+          {guideOverlay.h.map((y, i) => (
+            <div
+              key={`gh-${i}`}
+              className="fixed pointer-events-none z-50"
+              style={{ top: `${y}px`, left: `${guideOverlay.bounds.left}px`, height: '2px', width: `${guideOverlay.bounds.width}px`, background: 'rgba(244,63,94,0.9)' }}
+            />
+          ))}
+        </>
+      )}
+      {/* Presentation overlay */}
+      {presenting.active && (
+        <div
+          className="fixed inset-0"
+          style={{ backgroundColor: hexToRgba(backgroundColor, backgroundOpacity), zIndex: 9999 }}
+        >
+          <button
+            onClick={handleExitPresent}
+            className="absolute top-4 right-4 px-4 py-2 rounded-md bg-slate-900 text-white hover:bg-slate-800 shadow"
+          >
+            Salir
+          </button>
+          <div className="w-full h-full flex items-center justify-center">
+            <div style={{ width: `${presenting.cw * presenting.scale}px`, height: `${presenting.ch * presenting.scale}px` }}>
+              <div
+                className="relative"
+                style={{ width: `${presenting.cw}px`, height: `${presenting.ch}px`, transform: `scale(${presenting.scale})`, transformOrigin: 'top left' }}
+              >
+                {canvasElements.map((element, idx) => (
+                  <div
+                    key={element.id}
+                    className="absolute"
+                    style={{ left: element.x, top: element.y, width: element.width, height: element.height, zIndex: 20 + idx }}
+                  >
+                    {element.type === 'text' ? (
+                      <div
+                        className="w-full h-full px-3 py-2 rounded-lg border flex items-center justify-center overflow-hidden"
+                        style={{
+                          fontFamily: element.fontFamily,
+                          fontWeight: element.fontWeight,
+                          fontStyle: element.fontStyle,
+                          fontSize: element.fontSize,
+                          color: element.color,
+                          borderRadius: `${element.borderRadius ?? 0}%`,
+                          borderWidth: (element.borderWidth ?? 0) + 'px',
+                          borderColor: element.borderColor ?? '#e2e8f0',
+                          borderStyle: element.borderStyle ?? 'solid',
+                          backgroundColor: element.backgroundColor ?? 'transparent',
+                        }}
+                      >
+                        <div className="w-full whitespace-pre-wrap" title={element.content} style={{ color: element.color, textAlign: (element.textAlign as any) || 'center' }}>
+                          {element.content}
+                        </div>
+                      </div>
+                    ) : element.type === 'image' ? (
+                      <div
+                        className="w-full h-full shadow-md relative"
+                        style={{
+                          borderRadius: `${element.borderRadius ?? 0}%`,
+                          borderWidth: (element.borderWidth ?? 0) + 'px',
+                          borderColor: element.borderColor ?? '#e2e8f0',
+                          borderStyle: element.borderStyle ?? 'solid',
+                          backgroundColor: element.backgroundColor ?? 'transparent',
+                          overflow: 'hidden',
+                        }}
+                      >
+                        <img
+                          src={element.src}
+                          alt="Canvas element"
+                          className="block absolute"
+                          style={{
+                            left: `${element.imgOffsetX ?? 0}px`,
+                            top: `${element.imgOffsetY ?? 0}px`,
+                            transform: `scale(${element.imgScale ?? 1})`,
+                            transformOrigin: 'top left',
+                            filter: `brightness(${element.brightness ?? 100}%) contrast(${element.contrast ?? 100}%) saturate(${element.saturate ?? 100}%) hue-rotate(${element.hueRotate ?? 0}deg) grayscale(${element.grayscale ?? 0}%) sepia(${element.sepia ?? 0}%) blur(${element.blur ?? 0}px)`,
+                            opacity: Math.max(0, Math.min(100, element.opacity ?? 100)) / 100,
+                          }}
+                          draggable={false}
+                        />
+                      </div>
+                    ) : element.type === 'shape' ? (
+                      <div className="w-full h-full" style={{ position: 'relative' }}>
+                        {element.shapeKind === 'rectangle' || element.shapeKind === 'square' ? (
+                          <div
+                            className="w-full h-full"
+                            style={{
+                              backgroundColor: element.backgroundColor || '#60a5fa',
+                              borderRadius: element.shapeKind === 'rectangle' ? `${element.borderRadius ?? 0}%` : '0%'
+                            }}
+                          />
+                        ) : element.shapeKind === 'circle' ? (
+                          <div
+                            className="w-full h-full"
+                            style={{ backgroundColor: element.backgroundColor || '#60a5fa', borderRadius: '50%' }}
+                          />
+                        ) : (
+                          <svg viewBox="0 0 100 100" className="w-full h-full">
+                            {element.shapeKind === 'triangle' ? (
+                              <polygon
+                                points="50,10 90,90 10,90"
+                                fill={element.backgroundColor || '#60a5fa'}
+                                stroke={element.borderColor || 'transparent'}
+                                strokeWidth={element.borderWidth || 0}
+                                strokeDasharray={element.borderStyle === 'dashed' ? '6 4' : undefined}
+                              />
+                            ) : (
+                              <path
+                                d="M20 40 H60 V30 L85 50 L60 70 V60 H20 Z"
+                                fill={element.backgroundColor || '#60a5fa'}
+                                stroke={element.borderColor || 'transparent'}
+                                strokeWidth={element.borderWidth || 0}
+                                strokeDasharray={element.borderStyle === 'dashed' ? '6 4' : undefined}
+                              />
+                            )}
+                          </svg>
+                        )}
+                        {(element.shapeKind === 'rectangle' || element.shapeKind === 'square' || element.shapeKind === 'circle') && (
+                          <div
+                            className="pointer-events-none absolute inset-0"
+                            style={{
+                              border: `${element.borderWidth ?? 0}px ${element.borderStyle ?? 'solid'} ${element.borderColor ?? 'transparent'}`,
+                              borderRadius: element.shapeKind === 'circle' ? '50%' : element.shapeKind === 'rectangle' ? `${element.borderRadius ?? 0}%` : '0%'
+                            }}
+                          />
+                        )}
+                      </div>
+                    ) : null}
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
