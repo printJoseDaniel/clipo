@@ -68,6 +68,7 @@ function App() {
   const [showShapeKindOptions, setShowShapeKindOptions] = useState<boolean>(false);
   const [showAnimationPanel, setShowAnimationPanel] = useState<boolean>(false);
   const [peelingIds, setPeelingIds] = useState<number[]>([]);
+  const [clipboardImages, setClipboardImages] = useState<CanvasElement[] | null>(null);
   // Zoom del lienzo
   const [zoom, setZoom] = useState<number>(1);
   const clampZoom = (z: number) => Math.max(0.25, Math.min(4, Math.round(z * 100) / 100));
@@ -502,6 +503,49 @@ function App() {
         if (e.key === '0') {
           e.preventDefault();
           setZoom(1);
+          return;
+        }
+        // Copiar imágenes seleccionadas
+        if (e.key.toLowerCase() === 'c') {
+          e.preventDefault();
+          // Determinar selección actual (prioriza selección múltiple)
+          const ids = selectedElementIds.length > 0 ? selectedElementIds : (selectedElementId != null ? [selectedElementId] : []);
+          if (ids.length === 0) return;
+          const images = canvasElements.filter((el) => ids.includes(el.id) && el.type === 'image');
+          if (images.length === 0) return;
+          // Clonar a portapapeles interno
+          const clones = images.map((el) => ({ ...el }));
+          setClipboardImages(clones);
+          return;
+        }
+        // Pegar imágenes copiadas
+        if (e.key.toLowerCase() === 'v') {
+          if (!clipboardImages || clipboardImages.length === 0) return;
+          e.preventDefault();
+          const now = Date.now();
+          // Calcular siguiente índice base para nombrado
+          const baseIndex = canvasElements.filter((el) => el.type === 'image').length;
+          const newItems: CanvasElement[] = clipboardImages.map((el, idx) => {
+            // Desplazar un poco para que no queden exactamente encima
+            const offset = 16;
+            const id = now + idx;
+            const nextNameIndex = baseIndex + idx + 1;
+            return {
+              ...el,
+              id,
+              name: `imagen${nextNameIndex}`,
+              x: el.x + offset,
+              y: el.y + offset,
+              locked: false,
+            } as CanvasElement;
+          });
+          setCanvasElements((prev) => [...prev, ...newItems]);
+          // Seleccionar los nuevos elementos pegados
+          const newIds = newItems.map((i) => i.id);
+          setSelectedElementIds(newIds);
+          setSelectedElementId(newIds.length === 1 ? newIds[0] : null);
+          setShowElementPanel(true);
+          setShowBackgroundPanel(false);
           return;
         }
       }
