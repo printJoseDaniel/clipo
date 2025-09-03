@@ -947,10 +947,7 @@ function App() {
                 {projectName}
               </h1>
             )}
-            <div className="flex items-center space-x-2 text-sm text-slate-500">
-              <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-              <span>Guardado automáticamente</span>
-            </div>
+            {/* Removed auto-save indicator */}
           </div>
           
           <div className="flex items-center space-x-3">
