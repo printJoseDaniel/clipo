@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Type, Image as ImageIcon, MousePointer, Square, Lock, Unlock, Shapes, Trash2, AlignLeft, AlignCenter, AlignRight, AlignJustify } from 'lucide-react';
+import { Type, Image as ImageIcon, MousePointer, Square, Lock, Unlock, Shapes, Trash2, AlignLeft, AlignCenter, AlignRight, AlignJustify, Monitor } from 'lucide-react';
 
 function App() {
   type CanvasElement = {
@@ -61,12 +61,13 @@ function App() {
   const [showElementPanel, setShowElementPanel] = useState<boolean>(false);
   const [backgroundLocked, setBackgroundLocked] = useState<boolean>(false);
   const [dragLayerId, setDragLayerId] = useState<number | null>(null);
-  const [currentTool, setCurrentTool] = useState<'select'>('select');
+  const [currentTool, setCurrentTool] = useState<'select' | 'peel'>('select');
   const [selectedElementIds, setSelectedElementIds] = useState<number[]>([]);
   const [marquee, setMarquee] = useState<{ active: boolean; startX: number; startY: number; currentX: number; currentY: number }>({ active: false, startX: 0, startY: 0, currentX: 0, currentY: 0 });
   const [showIntro, setShowIntro] = useState<boolean>(true);
   const [showShapeKindOptions, setShowShapeKindOptions] = useState<boolean>(false);
   const [showAnimationPanel, setShowAnimationPanel] = useState<boolean>(false);
+  const [peelingIds, setPeelingIds] = useState<number[]>([]);
   // Zoom del lienzo
   const [zoom, setZoom] = useState<number>(1);
   const clampZoom = (z: number) => Math.max(0.25, Math.min(4, Math.round(z * 100) / 100));
@@ -819,6 +820,24 @@ function App() {
                 <MousePointer className="w-4 h-4 text-slate-600" />
               </button>
               <button
+                className={`p-3 border rounded-lg transition-colors duration-200 flex items-center justify-center ${currentTool === 'peel' ? 'bg-blue-50 border-blue-300' : 'bg-white hover:bg-slate-50 border-slate-200'}`}
+                title="Modo presentación (despegar post-it)"
+                onClick={() => {
+                  setCurrentTool('peel');
+                  setShowEffectDropdown(false);
+                  setShowCornersOptions(false);
+                  setShowImageCornersOptions(false);
+                  setShowImageBorderOptions(false);
+                  setShowImageFiltersOptions(false);
+                  setShowImageOpacityOptions(false);
+                  setShowElementPanel(false);
+                  setShowBackgroundPanel(false);
+                  setEditingTextId(null);
+                }}
+              >
+                <Monitor className="w-4 h-4 text-slate-600" />
+              </button>
+              <button
                 className="p-3 bg-white hover:bg-slate-50 border border-slate-200 rounded-lg transition-colors duration-200 flex items-center justify-center"
                 title="Formas"
                 onClick={handleAddShape}
@@ -1500,7 +1519,7 @@ function App() {
                   {canvasElements.map((element, idx) => (
                     <div
                       key={element.id}
-                      className="absolute cursor-move hover:shadow-lg transition-shadow duration-200 relative"
+                      className={`absolute cursor-move hover:shadow-lg transition-shadow duration-200 relative ${peelingIds.includes(element.id) ? 'animate-peel-off' : ''}`}
                       onMouseDown={(e) => {
                         e.stopPropagation();
                         // Si estamos editando texto (o doble clic), no iniciar movimiento
@@ -1563,6 +1582,17 @@ function App() {
                       }}
                       onClick={(e) => {
                         e.stopPropagation();
+                        // Si herramienta de despegado activa y es post-it, animar y eliminar
+                        if (currentTool === 'peel' && element.type === 'text' && (element.name || '').toLowerCase().startsWith('postit')) {
+                          if (!peelingIds.includes(element.id)) {
+                            setPeelingIds((prev) => [...prev, element.id]);
+                            setTimeout(() => {
+                              setCanvasElements((prev) => prev.filter((el) => el.id !== element.id));
+                              setPeelingIds((prev) => prev.filter((id) => id !== element.id));
+                            }, 600);
+                          }
+                          return;
+                        }
                         if (currentTool !== 'select') return;
                         setSelectedElementId(element.id);
                         setShowEffectDropdown(false);
@@ -2799,11 +2829,25 @@ function App() {
                 className="relative"
                 style={{ width: `${presenting.cw}px`, height: `${presenting.ch}px`, transform: `scale(${presenting.scale})`, transformOrigin: 'top left' }}
               >
+                <div className="relative w-full h-full p-8">
+                  <div className="relative w-full h-full" style={{ isolation: 'isolate' }}>
                 {canvasElements.map((element, idx) => (
                   <div
                     key={element.id}
-                    className="absolute"
+                    className={`absolute ${peelingIds.includes(element.id) ? 'animate-peel-off' : ''}`}
                     style={{ left: element.x, top: element.y, width: element.width, height: element.height, zIndex: 20 + idx }}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (currentTool === 'peel' && element.type === 'text' && (element.name || '').toLowerCase().startsWith('postit')) {
+                        if (!peelingIds.includes(element.id)) {
+                          setPeelingIds((prev) => [...prev, element.id]);
+                          setTimeout(() => {
+                            setCanvasElements((prev) => prev.filter((el) => el.id !== element.id));
+                            setPeelingIds((prev) => prev.filter((id) => id !== element.id));
+                          }, 600);
+                        }
+                      }
+                    }}
                   >
                     {element.type === 'text' ? (
                       <div
@@ -2901,6 +2945,8 @@ function App() {
                     ) : null}
                   </div>
                 ))}
+                  </div>
+                </div>
               </div>
             </div>
           </div>

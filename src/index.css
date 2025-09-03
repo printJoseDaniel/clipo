@@ -1,3 +1,27 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* Post-it peel off animation */
+@keyframes peel-off {
+  0% {
+    transform: rotate(0deg) translate(0, 0) rotateX(0deg) scale(1);
+    opacity: 1;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.12);
+  }
+  40% {
+    transform: rotate(-4deg) translate(6px, -8px) rotateX(12deg) scale(0.98);
+    box-shadow: 0 12px 24px rgba(0,0,0,0.18);
+  }
+  100% {
+    transform: rotate(-12deg) translate(60px, -80px) rotateX(35deg) scale(0.9);
+    opacity: 0;
+    box-shadow: 0 20px 40px rgba(0,0,0,0.22);
+  }
+}
+
+.animate-peel-off {
+  transform-origin: top left;
+  animation: peel-off 600ms ease-in forwards;
+  pointer-events: none;
+}
