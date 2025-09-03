@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Type, Image as ImageIcon, MousePointer, Square, Lock, Unlock, Shapes, Trash2, AlignLeft, AlignCenter, AlignRight, AlignJustify, Hand } from 'lucide-react';
+import { Type, Image as ImageIcon, MousePointer, Square, Lock, Unlock, Shapes, Trash2, AlignLeft, AlignCenter, AlignRight, AlignJustify } from 'lucide-react';
 
 function App() {
   type CanvasElement = {
@@ -61,9 +61,7 @@ function App() {
   const [showElementPanel, setShowElementPanel] = useState<boolean>(false);
   const [backgroundLocked, setBackgroundLocked] = useState<boolean>(false);
   const [dragLayerId, setDragLayerId] = useState<number | null>(null);
-  const [currentTool, setCurrentTool] = useState<'select' | 'hand'>('select');
-  const [pan, setPan] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
-  const [panning, setPanning] = useState<{ active: boolean; startX: number; startY: number; startPanX: number; startPanY: number }>({ active: false, startX: 0, startY: 0, startPanX: 0, startPanY: 0 });
+  const [currentTool, setCurrentTool] = useState<'select'>('select');
   const [selectedElementIds, setSelectedElementIds] = useState<number[]>([]);
   const [marquee, setMarquee] = useState<{ active: boolean; startX: number; startY: number; currentX: number; currentY: number }>({ active: false, startX: 0, startY: 0, currentX: 0, currentY: 0 });
   const [showIntro, setShowIntro] = useState<boolean>(true);
@@ -504,13 +502,6 @@ function App() {
           return;
         }
       }
-      // Cambio de herramienta: H = mano, V = selección (si no editando texto)
-      if (e.key.toLowerCase() === 'h') {
-        if (editingTextId !== null) return;
-        e.preventDefault();
-        setCurrentTool('hand');
-        return;
-      }
       // Modo presentación: Esc para salir y bloquear otros atajos
       if (presenting.active) {
         if (e.key === 'Escape') {
@@ -775,24 +766,6 @@ function App() {
                 <MousePointer className="w-4 h-4 text-slate-600" />
               </button>
               <button
-                className={`p-3 border rounded-lg transition-colors duration-200 flex items-center justify-center ${currentTool === 'hand' ? 'bg-blue-50 border-blue-300' : 'bg-white hover:bg-slate-50 border-slate-200'}`}
-                title="Mano (H)"
-                onClick={() => {
-                  setCurrentTool('hand');
-                  setShowEffectDropdown(false);
-                  setShowCornersOptions(false);
-                  setShowImageCornersOptions(false);
-                  setShowImageBorderOptions(false);
-                  setShowImageFiltersOptions(false);
-                  setShowImageOpacityOptions(false);
-                  setShowElementPanel(false);
-                  setShowBackgroundPanel(false);
-                  setEditingTextId(null);
-                }}
-              >
-                <Hand className="w-4 h-4 text-slate-600" />
-              </button>
-              <button
                 className="p-3 bg-white hover:bg-slate-50 border border-slate-200 rounded-lg transition-colors duration-200 flex items-center justify-center"
                 title="Formas"
                 onClick={handleAddShape}
@@ -995,7 +968,7 @@ function App() {
         </div>
 
         {/* Canvas Container */}
-        <div className={`h-[calc(100vh-4rem)] flex items-center justify-center p-8 bg-gradient-to-br from-slate-50 to-slate-100 ${currentTool === 'hand' ? (panning.active ? 'cursor-grabbing' : 'cursor-grab') : ''}`}
+        <div className="h-[calc(100vh-4rem)] flex items-center justify-center p-8 bg-gradient-to-br from-slate-50 to-slate-100"
         onWheel={(e) => {
           if (e.ctrlKey) {
             e.preventDefault();
@@ -1003,18 +976,7 @@ function App() {
             setZoom((z) => clampZoom(z * (dir > 0 ? 1.1 : 1 / 1.1)));
           }
         }}
-        onMouseDown={(e) => {
-          if (currentTool !== 'hand') return;
-          e.preventDefault();
-          setPanning({ active: true, startX: e.clientX, startY: e.clientY, startPanX: pan.x, startPanY: pan.y });
-        }}
         onMouseMove={(e) => {
-          if (currentTool === 'hand' && panning.active) {
-            const dx = e.clientX - panning.startX;
-            const dy = e.clientY - panning.startY;
-            setPan({ x: panning.startPanX + dx, y: panning.startPanY + dy });
-            return;
-          }
           // Actualizar rectángulo de selección (marquee)
           if (marquee.active) {
             setMarquee((m) => ({ ...m, currentX: e.clientX, currentY: e.clientY }));
@@ -1319,7 +1281,7 @@ function App() {
           {/* Interactive Canvas Zone */}
           <div
             className="relative w-[80%] h-[85%] bg-white shadow-2xl border-2 border-dashed border-slate-300 hover:border-blue-400 transition-all duration-300 cursor-default group overflow-hidden"
-            style={{ backgroundColor: hexToRgba(backgroundColor, backgroundOpacity), transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`, transformOrigin: 'top left' }}
+            style={{ backgroundColor: hexToRgba(backgroundColor, backgroundOpacity), transform: `scale(${zoom})`, transformOrigin: 'top left' }}
             ref={canvasRef}
           >
             {/* Background image layer removed (solo color sólido) */}
@@ -1360,12 +1322,6 @@ function App() {
                 setShowImageOpacityOptions(false);
                 setShowElementPanel(false);
                 if (!backgroundLocked && selectedElementIds.length === 0) setShowBackgroundPanel(true);
-        }}
-        onMouseUp={() => {
-          if (panning.active) setPanning((p) => ({ ...p, active: false }));
-        }}
-        onMouseLeave={() => {
-          if (panning.active) setPanning((p) => ({ ...p, active: false }));
         }}
         >
               {canvasElements.length === 0 ? (
