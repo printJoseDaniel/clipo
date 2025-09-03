@@ -652,12 +652,21 @@ function App() {
             const img = new window.Image();
             img.onload = () => {
               const nextImageIndex = canvasElements.filter((el) => el.type === 'image').length + 1;
-              // Usar tamaño original de la imagen
-              const w = Math.max(1, img.naturalWidth || 200);
-              const h = Math.max(1, img.naturalHeight || 150);
-
-              const cw2 = canvasAreaRef.current?.clientWidth ?? 0;
-              const ch2 = canvasAreaRef.current?.clientHeight ?? 0;
+              // Ajustar a que quepa en el lienzo manteniendo proporción
+              const natW = Math.max(1, img.naturalWidth || 200);
+              const natH = Math.max(1, img.naturalHeight || 150);
+              const areaEl = canvasAreaRef.current;
+              const cs = areaEl ? getComputedStyle(areaEl) : null;
+              const padX = cs ? parseFloat(cs.paddingLeft) + parseFloat(cs.paddingRight) : 0;
+              const padY = cs ? parseFloat(cs.paddingTop) + parseFloat(cs.paddingBottom) : 0;
+              const cw2 = (areaEl?.clientWidth ?? 0) - padX;
+              const ch2 = (areaEl?.clientHeight ?? 0) - padY;
+              const fitScale = Math.max(0.0001, Math.min(1, Math.min(
+                cw2 > 0 ? cw2 / natW : 1,
+                ch2 > 0 ? ch2 / natH : 1
+              )));
+              const w = Math.max(1, Math.round(natW * fitScale));
+              const h = Math.max(1, Math.round(natH * fitScale));
               const centerX = Math.max(0, Math.round((cw2 - w) / 2));
               const centerY = Math.max(0, Math.round((ch2 - h) / 2));
 
@@ -687,8 +696,8 @@ function App() {
                 imgScale: 1,
                 imgOffsetX: 0,
                 imgOffsetY: 0,
-                imgNatW: img.naturalWidth || w,
-                imgNatH: img.naturalHeight || h,
+                imgNatW: natW,
+                imgNatH: natH,
               };
               setCanvasElements((prev) => [...prev, newImage]);
               // Forzar selección en el siguiente frame para asegurar layout correcto del bounding box
