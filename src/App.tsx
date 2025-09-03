@@ -66,6 +66,7 @@ function App() {
   const [marquee, setMarquee] = useState<{ active: boolean; startX: number; startY: number; currentX: number; currentY: number }>({ active: false, startX: 0, startY: 0, currentX: 0, currentY: 0 });
   const [showIntro, setShowIntro] = useState<boolean>(true);
   const [showShapeKindOptions, setShowShapeKindOptions] = useState<boolean>(false);
+  const [showAnimationPanel, setShowAnimationPanel] = useState<boolean>(false);
   // Zoom del lienzo
   const [zoom, setZoom] = useState<number>(1);
   const clampZoom = (z: number) => Math.max(0.25, Math.min(4, Math.round(z * 100) / 100));
@@ -460,6 +461,7 @@ function App() {
       setShowImageFiltersOptions(false);
       setShowImageOpacityOptions(false);
       setShowElementPanel(false);
+      setShowAnimationPanel(false);
       // No deseleccionamos; solo cerramos desplegables
     };
     window.addEventListener('click', handleGlobalClick);
@@ -638,6 +640,48 @@ function App() {
     setShowBackgroundPanel(false);
   };
 
+  const handleAddPostIt = () => {
+    const nextIndex = canvasElements.filter((el) => el.type === 'text' && (el.name || '').startsWith('postit')).length + 1;
+    // Área de contenido descontando padding
+    const el = canvasAreaRef.current;
+    const cs = el ? getComputedStyle(el) : null;
+    const padX = cs ? parseFloat(cs.paddingLeft) + parseFloat(cs.paddingRight) : 0;
+    const padY = cs ? parseFloat(cs.paddingTop) + parseFloat(cs.paddingBottom) : 0;
+    const cw = (el?.clientWidth ?? 0) - padX;
+    const ch = (el?.clientHeight ?? 0) - padY;
+    // Tamaño por defecto y centrado
+    const defaultWidth = 160;
+    const defaultHeight = 160;
+    const x = Math.max(0, Math.round((cw - defaultWidth) / 2));
+    const y = Math.max(0, Math.round((ch - defaultHeight) / 2));
+
+    const postit: CanvasElement = {
+      id: Date.now(),
+      type: 'text',
+      name: `postit${nextIndex}`,
+      content: '?',
+      x,
+      y,
+      width: defaultWidth,
+      height: defaultHeight,
+      fontSize: 72,
+      color: '#1f2937',
+      fontFamily: 'Inter, system-ui, sans-serif',
+      fontWeight: 'bold',
+      fontStyle: 'normal',
+      textAlign: 'center',
+      borderRadius: 4,
+      borderWidth: 2,
+      borderColor: '#eab308',
+      borderStyle: 'solid',
+      backgroundColor: '#fef08a',
+      locked: false,
+    };
+    setCanvasElements((prev) => [...prev, postit]);
+    setSelectedElementId(postit.id);
+    setShowElementPanel(true);
+  };
+
   const handleImageUpload = () => {
     const input = document.createElement('input');
     input.type = 'file';
@@ -792,6 +836,37 @@ function App() {
 
       {/* Main Canvas Area */}
       <div className="flex-1 h-full bg-white relative overflow-hidden">
+        {showAnimationPanel && (
+          <div className="absolute top-16 left-0 w-[22rem] min-w-[300px] h-[calc(100%-4rem)] border-r border-slate-200 bg-white/95 backdrop-blur-sm p-4 overflow-y-auto z-30 text-black">
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="text-sm font-semibold text-slate-700">Animaciones</h2>
+              <button
+                className="text-xs px-2 py-1 rounded border border-slate-300 text-slate-700 hover:bg-white"
+                onClick={() => setShowAnimationPanel(false)}
+              >
+                Cerrar
+              </button>
+            </div>
+            <div className="space-y-3">
+              <div className="p-3 rounded border border-slate-200 bg-white">
+                <div className="flex items-start space-x-3">
+                  <div className="w-10 h-10 bg-yellow-200 border border-amber-500 rounded-sm flex items-center justify-center text-lg font-bold text-slate-800">?</div>
+                  <div className="flex-1">
+                    <div className="text-sm font-medium text-slate-800">Post-it con interrogación</div>
+                    <div className="text-xs text-slate-500 mb-2">Crea una nota adhesiva con “?” redimensionable.</div>
+                    <button
+                      className="text-xs px-3 py-1 rounded bg-blue-600 hover:bg-blue-700 text-white"
+                      onClick={() => handleAddPostIt()}
+                    >
+                      Añadir post-it
+                    </button>
+                  </div>
+                </div>
+              </div>
+              {/* Más opciones de animación pueden ir aquí */}
+            </div>
+          </div>
+        )}
         {showLayersPanel && (
           <div className="absolute top-16 left-0 w-[22rem] min-w-[300px] h-[calc(100%-4rem)] border-r border-slate-200 bg-slate-50/90 backdrop-blur-sm p-4 overflow-y-auto z-20">
             <div className="flex items-center justify-between mb-3">
@@ -1837,8 +1912,8 @@ function App() {
                                   <button
                                     className="block w-full text-left px-4 py-2 text-slate-700 hover:bg-slate-100 transition-colors duration-200"
                                     onClick={() => {
-                                      console.log('Añadir animación al elemento:', element.id);
                                       setShowEffectDropdown(false);
+                                      setShowAnimationPanel(true);
                                     }}
                                   >
                                     🎬 Añadir animación
