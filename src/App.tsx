@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Type, Image as ImageIcon, MousePointer, Square, Lock, Unlock, Shapes, Trash2, AlignLeft, AlignCenter, AlignRight, AlignJustify, Monitor } from 'lucide-react';
+import { Type, Image as ImageIcon, MousePointer, Square, Lock, Unlock, Shapes, Trash2, AlignLeft, AlignCenter, AlignRight, AlignJustify, Monitor, Undo2, Redo2 } from 'lucide-react';
 
 function App() {
   type CanvasElement = {
@@ -69,6 +69,45 @@ function App() {
   const [showAnimationPanel, setShowAnimationPanel] = useState<boolean>(false);
   const [peelingIds, setPeelingIds] = useState<number[]>([]);
   const [clipboardImages, setClipboardImages] = useState<CanvasElement[] | null>(null);
+  // Historial para deshacer/rehacer (solo elementos del lienzo)
+  const [historyPast, setHistoryPast] = useState<CanvasElement[][]>([]);
+  const [historyFuture, setHistoryFuture] = useState<CanvasElement[][]>([]);
+  const skipHistoryRef = useRef<boolean>(false);
+  const lastElementsRef = useRef<CanvasElement[]>([]);
+  const mountedRef = useRef<boolean>(false);
+  const HISTORY_LIMIT = 50;
+
+  const canUndo = historyPast.length > 0;
+  const canRedo = historyFuture.length > 0;
+
+  const doUndo = () => {
+    setHistoryPast((past) => {
+      if (past.length === 0) return past;
+      const prev = past[past.length - 1];
+      const rest = past.slice(0, -1);
+      setHistoryFuture((future) => [canvasElements.map((el) => ({ ...el })), ...future].slice(0, HISTORY_LIMIT));
+      skipHistoryRef.current = true;
+      setCanvasElements(prev.map((el) => ({ ...el })));
+      lastElementsRef.current = prev;
+      return rest;
+    });
+  };
+
+  const doRedo = () => {
+    setHistoryFuture((future) => {
+      if (future.length === 0) return future;
+      const next = future[0];
+      const rest = future.slice(1);
+      setHistoryPast((past) => {
+        const snapshot = canvasElements.map((el) => ({ ...el }));
+        return past.length >= HISTORY_LIMIT ? [...past.slice(1), snapshot] : [...past, snapshot];
+      });
+      skipHistoryRef.current = true;
+      setCanvasElements(next.map((el) => ({ ...el })));
+      lastElementsRef.current = next;
+      return rest;
+    });
+  };
   // Zoom del lienzo
   const [zoom, setZoom] = useState<number>(1);
   const clampZoom = (z: number) => Math.max(0.25, Math.min(4, Math.round(z * 100) / 100));
@@ -490,6 +529,39 @@ function App() {
     const onKeyDown = (e: KeyboardEvent) => {
       // Atajos de zoom (Ctrl + / Ctrl - / Ctrl 0)
       if (e.ctrlKey) {
+        // Deshacer / Rehacer
+        if (e.key.toLowerCase() === 'z') {
+          e.preventDefault();
+          if (e.shiftKey) {
+            // Rehacer
+            setHistoryFuture((future) => {
+              if (future.length === 0) return future;
+              const next = future[0];
+              const rest = future.slice(1);
+              setHistoryPast((past) => {
+                const snapshot = canvasElements.map((el) => ({ ...el }));
+                return past.length >= HISTORY_LIMIT ? [...past.slice(1), snapshot] : [...past, snapshot];
+              });
+              skipHistoryRef.current = true;
+              setCanvasElements(next.map((el) => ({ ...el })));
+              lastElementsRef.current = next;
+              return rest;
+            });
+          } else {
+            // Deshacer
+            setHistoryPast((past) => {
+              if (past.length === 0) return past;
+              const prev = past[past.length - 1];
+              const rest = past.slice(0, -1);
+              setHistoryFuture((future) => [canvasElements.map((el) => ({ ...el })), ...future].slice(0, HISTORY_LIMIT));
+              skipHistoryRef.current = true;
+              setCanvasElements(prev.map((el) => ({ ...el })));
+              lastElementsRef.current = prev;
+              return rest;
+            });
+          }
+          return;
+        }
         if (e.key === '+' || e.key === '=') {
           e.preventDefault();
           setZoom((z) => clampZoom(z * 1.1));
@@ -600,6 +672,27 @@ function App() {
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [selectedElementId, editingTextId, canvasElements, presenting.active]);
+
+  // Registrar cambios en elementos para historial (evita registrar durante undo/redo)
+  useEffect(() => {
+    if (!mountedRef.current) {
+      mountedRef.current = true;
+      lastElementsRef.current = canvasElements;
+      return;
+    }
+    if (skipHistoryRef.current) {
+      skipHistoryRef.current = false;
+      return;
+    }
+    // Guardar estado anterior en historial y limpiar futuro
+    const prevSnapshot = lastElementsRef.current.map((el) => ({ ...el }));
+    setHistoryPast((past) => {
+      const nextPast = [...past, prevSnapshot];
+      return nextPast.length > HISTORY_LIMIT ? nextPast.slice(nextPast.length - HISTORY_LIMIT) : nextPast;
+    });
+    setHistoryFuture([]);
+    lastElementsRef.current = canvasElements;
+  }, [canvasElements]);
 
   // Recalcular posición de paneles (imagen/texto/fondo) centrados respecto al lienzo, sobre su borde superior
   useEffect(() => {
@@ -1098,6 +1191,24 @@ function App() {
           </div>
           
           <div className="flex items-center space-x-3">
+            <button
+              onClick={doUndo}
+              disabled={!canUndo}
+              title="Deshacer (Ctrl+Z)"
+              className="px-3 py-2 border border-slate-300 rounded-lg bg-white text-slate-700 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed flex items-center space-x-1"
+            >
+              <Undo2 className="w-4 h-4" />
+              <span className="text-sm">Deshacer</span>
+            </button>
+            <button
+              onClick={doRedo}
+              disabled={!canRedo}
+              title="Rehacer (Ctrl+Shift+Z)"
+              className="px-3 py-2 border border-slate-300 rounded-lg bg-white text-slate-700 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed flex items-center space-x-1"
+            >
+              <Redo2 className="w-4 h-4" />
+              <span className="text-sm">Rehacer</span>
+            </button>
             {/* Vista previa button removed */}
             <button onClick={handlePresent} className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors duration-200">
               Presentar
