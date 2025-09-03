@@ -1815,82 +1815,49 @@ function App() {
                               />
                             </>
                           )}
-                          <div className="relative">
-                            <button
-                              className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded-md text-sm shadow-md transition-colors duration-200"
-                              style={{
-                                position: 'absolute',
-                                top: '100%',
-                                left: '0%',
-                                marginTop: '10px',
-                              }}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setShowEffectDropdown(!showEffectDropdown);
-                              }}
-                            >
-                              Añadir efecto
-                            </button>
-
-                            {showEffectDropdown && (
-                              <div
-                                className="absolute bg-white border border-slate-200 rounded-md shadow-lg py-1 z-10"
-                                style={{
-                                  top: 'calc(100% + 50px)',
-                                  left: '0%',
-                                  minWidth: '180px',
+                          {element.type === 'image' && (
+                            <div className="relative">
+                              <button
+                                className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded-md text-sm shadow-md transition-colors duration-200"
+                                style={{ position: 'absolute', top: '100%', left: '0%', marginTop: '10px' }}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setShowEffectDropdown(!showEffectDropdown);
                                 }}
-                                onClick={(e) => e.stopPropagation()}
                               >
-                                <button
-                                  className="block w-full text-left px-4 py-2 text-slate-700 hover:bg-slate-100 transition-colors duration-200"
-                                  onClick={() => {
-                                    console.log('Applying fade animation to element:', element.id);
-                                    setShowEffectDropdown(false);
-                                  }}
+                                Añadir efecto
+                              </button>
+
+                              {showEffectDropdown && (
+                                <div
+                                  className="absolute bg-white border border-slate-200 rounded-md shadow-lg py-1 z-10"
+                                  style={{ top: 'calc(100% + 50px)', left: '0%', minWidth: '180px' }}
+                                  onClick={(e) => e.stopPropagation()}
                                 >
-                                  🎭 Animación de entrada
-                                </button>
-                                <button
-                                  className="block w-full text-left px-4 py-2 text-slate-700 hover:bg-slate-100 transition-colors duration-200"
-                                  onClick={() => {
-                                    console.log('Applying transition to element:', element.id);
-                                    setShowEffectDropdown(false);
-                                  }}
-                                >
-                                  ⚡ Transición
-                                </button>
-                                <button
-                                  className="block w-full text-left px-4 py-2 text-slate-700 hover:bg-slate-100 transition-colors duration-200"
-                                  onClick={() => {
-                                    console.log('Applying filter to element:', element.id);
-                                    setShowEffectDropdown(false);
-                                  }}
-                                >
-                                  🎨 Filtro visual
-                                </button>
-                                <button
-                                  className="block w-full text-left px-4 py-2 text-slate-700 hover:bg-slate-100 transition-colors duration-200"
-                                  onClick={() => {
-                                    console.log('Applying shadow to element:', element.id);
-                                    setShowEffectDropdown(false);
-                                  }}
-                                >
-                                  💫 Sombra
-                                </button>
-                                <div className="border-t border-slate-200 my-1"></div>
-                                <button
-                                  className="block w-full text-left px-4 py-2 text-red-600 hover:bg-red-50 transition-colors duration-200"
-                                  onClick={() => {
-                                    setCanvasElements(canvasElements.filter((el) => el.id !== element.id));
-                                    setSelectedElementId(null);
-                                    setShowEffectDropdown(false);
-                                  }}
-                                >
-                                  🗑️ Eliminar elemento
-                                </button>
-                              </div>
-                            )}
+                                  <button
+                                    className="block w-full text-left px-4 py-2 text-slate-700 hover:bg-slate-100 transition-colors duration-200"
+                                    onClick={() => {
+                                      console.log('Añadir animación al elemento:', element.id);
+                                      setShowEffectDropdown(false);
+                                    }}
+                                  >
+                                    🎬 Añadir animación
+                                  </button>
+                                  <div className="border-t border-slate-200 my-1"></div>
+                                  <button
+                                    className="block w-full text-left px-4 py-2 text-red-600 hover:bg-red-50 transition-colors duration-200"
+                                    onClick={() => {
+                                      setCanvasElements(canvasElements.filter((el) => el.id !== element.id));
+                                      setSelectedElementId(null);
+                                      setShowEffectDropdown(false);
+                                    }}
+                                  >
+                                    🗑️ Eliminar elemento
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+                          )}
                             {showElementPanel && element.type === 'shape' && (
                               <div
                                 className="fixed bg-white border border-slate-200 rounded-md shadow-lg px-3 py-2 z-30 flex items-center space-x-3 text-black"
@@ -2619,7 +2586,6 @@ function App() {
                                 </button>
                               </div>
                             )}
-                          </div>
                         </>
                       )}
                     </div>
